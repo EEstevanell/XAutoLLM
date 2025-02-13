@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "autogoal_transformers"
+version = "0.8.4"
+description = "transformers algorithm library wrapper for AutoGOAL"
+authors = ["Suilan Estevez-Velarde <suilanestevez@gmail.com>", "Alejandro Piad-Morffis <apiad@apiad.net>", "Ernesto L. Estevanell-Valladares <ernestoestevanellv@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://autogoal.github.io"
+documentation = "https://autogoal.github.io"
+repository = "https://github.com/autogoal/autogoal-contrib"
+packages = [{include = "autogoal_transformers"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9.13,<3.11"
+torch = "^2.0.0"
+transformers = "^4.27.3"
+evaluate = "^0.4.1"
+datasets = "^2.14.6"
+sentencepiece = "^0.2.0"
+peft="^0.11.1"
+poetry = "^1.8.4"
+protobuf = "^5.28.2"
+numpy = "1.26.4"
+huggingface-hub = "^0.26.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

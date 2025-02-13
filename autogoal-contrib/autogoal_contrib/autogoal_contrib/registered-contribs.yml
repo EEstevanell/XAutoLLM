@@ -1,0 +1,12 @@
+- autogoal-contrib
+- autogoal-gensim
+- autogoal-keras
+- autogoal-nltk
+- autogoal-regex
+- autogoal-sklearn
+- autogoal-spacy
+- autogoal-streamlit
+- autogoal-telegram
+- autogoal-transformers
+- autogoal-wikipedia
+- autogoal-remote

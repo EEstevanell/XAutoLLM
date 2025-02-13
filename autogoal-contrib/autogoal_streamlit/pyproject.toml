@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "autogoal_streamlit"
+version = "0.8.4"
+description = "streamlit library wrapper for AutoGOAL"
+authors = ["Suilan Estevez-Velarde <suilanestevez@gmail.com>", "Alejandro Piad-Morffis <apiad@apiad.net>", "Ernesto L. Estevanell-Valladares <ernestoestevanellv@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://autogoal.github.io"
+documentation = "https://autogoal.github.io"
+repository = "https://github.com/autogoal/autogoal-contrib"
+packages = [{include = "autogoal_streamlit"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9.13,<3.11"
+streamlit = "^1.20.0"
+nx-altair = "^0.1.6"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
