@@ -1,6 +1,3 @@
 [submodule "autogoal-remote"]
 	path = autogoal-remote
 	url = https://github.com/autogoal/autogoal-remote
-[submodule "autogoal-contrib"]
-	path = autogoal-contrib
-	url = https://github.com/autogoal/autogoal-contrib
