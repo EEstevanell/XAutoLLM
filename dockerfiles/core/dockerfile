@@ -86,7 +86,7 @@ COPY dockerfiles/install-package.sh /home/coder/autogoal/install-package.sh
 RUN find /home/coder/autogoal -type f \
     -exec sed -i 's/\r$//' {} \;
 
-RUN chmod +x install-package.sh && ./install-package.sh core
+RUN chmod +x install-package.sh && ./install-package.sh core sklearn nltk transformers telegram
 
 # Allow 'coder' to use sudo without a password
 RUN echo "coder ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/coder && sudo chmod 0440 /etc/sudoers.d/coder

@@ -1,19 +1,12 @@
 # ‎‎
-#     ^         _         ____  ___    ^    _     
-#    / \  _   _| |_ ___  / ___|/ _ \  / \  | |    
-#   / _ \| | | | __/ _ \| |_ _| | | |/ _ \ | |    
-#  / ___ \ |_| | || (_) | |_| | |_| / ___ \| |___ 
-# /_/   \_\__,_|\__\___/ \____|\___/_/   \_\_____|
-#                                                 
+#  __   __               _        _      _      __  __ 
+#  \ \ / /    /\        | |      | |    | |    |  \/  |
+#   \ V /    /  \  _   _| |_ ___ | |    | |    | \  / |
+#    > <    / /\ \| | | | __/ _ \| |    | |    | |\/| |
+#   / . \  / ____ \ |_| | || (_) | |____| |____| |  | |
+#  /_/ \_\/_/    \_\__,_|\__\___/|______|______|_|  |_|
+#
 # Usage: make [command]
-
-
-
-# ‎‎
-# ---------------------------------------------------------------------------
-# The following commands can be run anywhere.
-# ---------------------------------------------------------------------------
-# ‎‎
 
 # help         Show this information.
 .PHONY: help
@@ -25,9 +18,6 @@ help:
 clean:
 	git clean -xdff
 
-
-
-
 # ‎‎
 # ---------------------------------------------------------------------------
 # The following commands must be run OUTSIDE the development environment.
@@ -37,97 +27,18 @@ clean:
 # docker-base  Builds the development base image from scratch.
 .PHONY: docker
 docker:
-	docker build . -t autogoal/autogoal:core -f dockerfiles/core/dockerfile --no-cache
-
-# docker-contrib Builds the development image with target contrib from scratch. 
-.PHONY: docker-contrib
-docker-contrib:
-	docker build . -t autogoal/autogoal:$(CONTRIB) -f dockerfiles/development/dockerfile --build-arg extras="common $(CONTRIB) remote" --no-cache
-
-# docker-sklearn Builds the development image with sklearn and streamlit contrib from scratch. Includes autogoal-remote and autogoal-contrib.
-.PHONY: docker-streamlit-demo
-docker-streamlit-demo:
-	docker build . -t autogoal/autogoal:streamlit-demo -f dockerfiles/demo/dockerfile --no-cache
-
-# docker-sklearn Builds the development image with sklearn contrib from scratch.
-.PHONY: docker-sklearn
-docker-sklearn: 
-	make docker-contrib CONTRIB=sklearn
-
-# docker-sklearn Builds the development image with nltk contrib from scratch.
-.PHONY: docker-nltk
-docker-nltk: 
-	make docker-contrib CONTRIB=nltk
-
-# pull         Pull the development image.
-.PHONY: pull
-pull:
-	docker pull autogoal/autogoal:latest
-
-# pull-safe    Pull the development image using docker.uclv.cu.
-.PHONY: pull-safe
-pull-safe:
-	docker pull docker.uclv.cu/autogoal/autogoal:latest
-	docker tag docker.uclv.cu/autogoal/autogoal:latest autogoal/autogoal:latest
-
-# push         Push the development image to Docker Hub.
-.PHONY: push
-push:
-	docker push autogoal/autogoal:latest
-
-# shell        Opens a shell in the development image.
-.PHONY: shell
-shell:
-	docker-compose run --service-ports autogoal bash
-
-.PHONY: streamlit-demo
-streamlit-demo:
-	docker run -p 8500:8501 autogoal/autogoal:streamlit-demo
+	docker build . -t autogoal/xautollm:latest -f dockerfiles/core/dockerfile --no-cache
 
 # container          Creates the base development container.
 SERVICE=autogoal-core
 .PHONY: container
 container:
-	docker-compose run --service-ports --name=$(SERVICE) $(SERVICE)
-
+	docker-compose run --service-ports --name=xautollm-gpu xautollm-gpu
 
 # container         Run the base development image with GPU enabled.
 .PHONY: container-gpu
 container-gpu:
-	docker run -it --name autogoal-core-gpu  --hostname autogoal-core-gpu -p 8500:8501 -p 8000:8000 -v "$(pwd):/home/coder/autogoal" -v "$HOME/.ssh:/home/coder/.ssh" -v "$HOME/.gitconfig:/home/coder/.gitconfig" --user 1000:1000 --gpus all autogoal/autogoal:core
-
-# container-sklearn  Run the development image with sklearn.
-.PHONY: container-sklearn
-container-sklearn:
-	make container SERVICE=autogoal-sklearn
-
-# container-nltk     Run the development image with nltk.
-.PHONY: container-nltk
-container-nltk:
-	make container SERVICE=autogoal-nltk
-
-# container-full     Run the development image with all contribs installed.
-.PHONY: container-full
-container-full:
-	make container SERVICE=autogoal-full
-
-# dev-full     Run the development image with all contribs installed and GPU enabled.
-.PHONY: container-full-gpu
-container-full-gpu:
-	make container-gpu SERVICE=autogoal-full
-
-# mkdocs       Run the docs server in the development image.
-.PHONY: mkdocs
-mkdocs:
-	docker-compose run autogoal mkdocs serve -a 0.0.0.0:8000
-
-# test-ci      Test only the core code in a newly built image.
-.PHONY: test-ci
-test-ci:
-	docker build -t autogoal:basic -f tests/basic.dockerfile .
-
-
-
+	docker run -it --name xautollm-gpu --hostname xautollm-gpu -p 8500:8501 -p 8000:8000 -v "$(pwd):/home/coder/autogoal" -v "$HOME/.ssh:/home/coder/.ssh" -v "$HOME/.gitconfig:/home/coder/.gitconfig" --user 1000:1000 --gpus all autogoal/xautollm:latest
 
 # ‎‎
 # ---------------------------------------------------------------------------
@@ -182,8 +93,6 @@ install: ensure-dev
 	poetry install
 
 
-
-
 # ‎‎
 # ---------------------------------------------------------------------------
 # The following commands are for remote communication between enviroments.
@@ -194,7 +103,6 @@ install: ensure-dev
 .PHONY: host-ns
 host-ns: ensure-dev
 	pyro5-ns 
-
 
 # ‎‎
 # ---------------------------------------------------------------------------
