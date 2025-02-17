@@ -30,7 +30,6 @@ docker:
 	docker build . -t autogoal/xautollm:latest -f dockerfiles/core/dockerfile --no-cache
 
 # container          Creates the base development container.
-SERVICE=autogoal-core
 .PHONY: container
 container:
 	docker-compose run --service-ports --name=xautollm-gpu xautollm-gpu

@@ -3,7 +3,7 @@ import csv
 
 from autogoal.datasets import download, datapath
 
-def load(*args, onehot = False, **kwargs):
+def load(*args, onehot = True, **kwargs):
     try:
         download("imdb_50k_movie_reviews")
     except:
