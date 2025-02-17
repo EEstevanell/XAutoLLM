@@ -13,7 +13,7 @@ packages = [{include = "autogoal_nltk"}]
 [tool.poetry.dependencies]
 python = ">=3.9.13,<3.11"
 nltk = "^3.8.1"
-gensim = "4.1"
+gensim = "^4.3.3"
 numpy = "1.26.4"
 poetry = "^1.8.4"
 
