@@ -1,0 +1,15 @@
+liar:
+  low:
+    liar: "liar_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
+  moderate:
+    liar: "liar_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
+  high:
+    liar: "liar_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
+    
+sst2:
+  low:
+    liar: "sst2_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
+  moderate:
+    liar: "sst2_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
+  high:
+    liar: "sst2_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
