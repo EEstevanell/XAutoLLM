@@ -1,5 +1,6 @@
+#!/usr/bin/env python
 import os
-from typing import Dict
+from typing import Dict, List, Union
 import yaml
 import json
 import pandas as pd
@@ -12,17 +13,16 @@ class DataLoader:
         self.data_root = data_root
         self.config = self._load_yaml_config()
 
-    def _load_yaml_config(self):
+    def _load_yaml_config(self) -> Dict:
         with open(self.config_path, 'r') as file:
             return yaml.safe_load(file)
 
-    def get_dataset_configs(self, dataset: str):
+    def get_dataset_configs(self, dataset: str) -> Dict:
         return self.config.get(dataset, {})
 
     def load_data_for_alias(self, alias: str) -> pd.DataFrame:
         alias_path = os.path.join(self.data_root, alias)
         data = []
-
         if not os.path.isdir(alias_path):
             print(f"Alias directory not found: {alias_path}")
             return pd.DataFrame()
@@ -37,26 +37,21 @@ class DataLoader:
             for json_file in sorted(os.listdir(date_path)):
                 if not json_file.endswith('.json'):
                     continue
-
                 json_path = os.path.join(date_path, json_file)
                 try:
                     with open(json_path, 'r') as f:
                         content = json.load(f)
-
                     timestamp = self.parse_timestamp(date_folder, json_file)
                     if timestamp is None:
                         continue
-
                     # Extract metrics from content
                     macro_f1 = content.get('f1', np.nan)
                     accuracy = content.get('accuracy', np.nan)
                     evaluation_time = content.get('evaluation_time', np.nan)
-
                     algorithm = dict(content["algorithms"][0])
                     finetuning_method = list(algorithm)[0]
                     llm = list(algorithm[finetuning_method]["inner_model"]["value"])[0]
                     params = list(algorithm[finetuning_method])[1:]
-
                     # Append to data list
                     data.append({
                         'alias': alias,
@@ -68,20 +63,18 @@ class DataLoader:
                         'llm': str(llm).removeprefix("WORD_EMB_").removeprefix("TEXT_GEN_").replace("_", " "),
                         'parameters': params,
                     })
-
                 except Exception as e:
                     print(f"Error reading {json_path}: {e}")
                     continue
 
         if not data:
             return pd.DataFrame()
-
         df = pd.DataFrame(data)
         df.sort_values('timestamp', inplace=True)
         df.reset_index(drop=True, inplace=True)
         return df
 
-    def parse_timestamp(self, date_folder: str, json_filename: str) -> datetime:
+    def parse_timestamp(self, date_folder: str, json_filename: str) -> Union[datetime, None]:
         date_part = date_folder
         time_part = json_filename.split('-')[0]  # Assuming format is 'hh:mm:ss'
         datetime_str = f"{date_part} {time_part}"
@@ -92,9 +85,12 @@ class DataLoader:
             return None
 
     def load_all_data_for_dataset(self, dataset: str) -> Dict[str, pd.DataFrame]:
+        """
+        This method is used for multi-objective experiments.
+        The config structure for multi-objective experiments is expected to have a nested structure.
+        """
         dataset_configs = self.get_dataset_configs(dataset)
         all_data = {}
-        
         for complexity in dataset_configs:
             all_data[complexity] = {}
             if complexity == "baseline":
@@ -104,15 +100,40 @@ class DataLoader:
                 for method in dataset_configs[complexity]:
                     alias_name = dataset_configs[complexity][method]
                     all_data[complexity][method] = self.load_data_for_alias(alias_name)
+        return all_data
 
+    def load_all_data_for_single_objective_dataset(self, dataset: str) -> Dict[str, List[pd.DataFrame]]:
+        """
+        This method is dedicated to single-objective experiments.
+        In single-objective analyses, each candidate is evaluated over multiple seeds.
+        The expected YAML configuration for a dataset should define each candidate with either a single alias (str)
+        or a list of aliases (List[str]) corresponding to each seed run.
+
+        Returns a dictionary mapping candidate names to a list of DataFrames (one per seed).
+        """
+        dataset_configs = self.get_dataset_configs(dataset)
+        all_data = {}
+        for candidate, aliases in dataset_configs.items():
+            candidate_data = []
+            if isinstance(aliases, list):
+                for alias in aliases:
+                    df = self.load_data_for_alias(alias)
+                    candidate_data.append(df)
+            else:
+                df = self.load_data_for_alias(aliases)
+                candidate_data.append(df)
+            all_data[candidate] = candidate_data
         return all_data
 
 if __name__ == "__main__":
-    multi_objective_loader = DataLoader('experiments\configs\multi-objective\candidates.yaml', 'data/experience_store')
-    single_objective_loader = DataLoader('experiments\configs\single-objective', 'data/experience_store')
-
-    # Example usage to load all data for a specific dataset (e.g., "liar")
+    # Example usage for multi-objective experiments
+    multi_objective_loader = DataLoader('/home/coder/autogoal/experiments/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
     liar_data_all_configs = multi_objective_loader.load_all_data_for_dataset('liar')
-    
-    # Print or process the loaded data as needed
+    print("Multi-objective data loaded:")
     print(liar_data_all_configs)
+    
+    # Example usage for single-objective experiments
+    single_objective_loader = DataLoader('/home/coder/autogoal/experiments/configs/single-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    liar_single_objective_data = single_objective_loader.load_all_data_for_single_objective_dataset('liar')
+    print("Single-objective data loaded:")
+    print(liar_single_objective_data)

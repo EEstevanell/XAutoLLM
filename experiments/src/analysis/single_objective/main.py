@@ -1,30 +1,122 @@
-import functools
 import itertools
-import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import warnings
 import numpy as np
 import pandas as pd
 from scipy import stats
 from src.data_loading.data_loader import DataLoader
 import statsmodels.stats.multitest as multitest
+from scipy.integrate import trapezoid
 
-from src.analysis.single_objective_statistics import calculate_time_to_threshold, compute_auc_over_time, compute_convergence_rate, load_data
+def compute_auc_over_time(valid_df: pd.DataFrame, normalize: bool = True) -> float:
+    """
+    Computes the area under the 'macro_f1' vs. time curve using the trapezoidal rule.
+    
+    Args:
+        valid_df: DataFrame containing 'timestamp' and 'macro_f1' columns.
+        normalize: Whether to normalize the AUC to the time range (default: True).
+                  When True, the result represents the average f1 score over time.
+    
+    Returns:
+        The area under curve for the first 24 hours, or np.nan if insufficient data.
+        When normalized, this value will be between 0 and 1 (representing average f1).
+    """
+    # Early validation
+    if valid_df.empty or 'macro_f1' not in valid_df.columns or 'timestamp' not in valid_df.columns:
+        return np.nan
+        
+    # Prepare the data (sort and convert timestamps)
+    valid_df = valid_df.copy()
+    valid_df = valid_df[~valid_df['macro_f1'].isnull() & ~valid_df['macro_f1'].isin([np.inf, -np.inf])]
+    
+    if len(valid_df) < 2:  # Need at least two points for AUC
+        return np.nan
+        
+    valid_df = valid_df.sort_values('timestamp')
+    start_time = valid_df['timestamp'].min()
+    valid_df['relative_time_hours'] = (valid_df['timestamp'] - start_time).dt.total_seconds() / 3600.0
+    
+    # Truncate beyond 24 hours if needed
+    max_hours = 24
+    valid_df = valid_df[valid_df["relative_time_hours"] <= max_hours]
+    if len(valid_df) < 2:
+        return np.nan
+        
+    # Add boundary point at t=0 if missing
+    if valid_df['relative_time_hours'].min() > 0:
+        # First evaluation might not be at exactly t=0, assume initial f1=0
+        first_row = valid_df.iloc[0].copy()
+        first_row['relative_time_hours'] = 0
+        first_row['macro_f1'] = 0
+        valid_df = pd.concat([pd.DataFrame([first_row]), valid_df])
+    
+    # Add boundary point at t=24 if missing
+    if valid_df['relative_time_hours'].max() < max_hours:
+        # If experiment stopped before 24h, use the last f1 value until the end
+        last_row = valid_df.iloc[-1].copy()
+        last_row['relative_time_hours'] = max_hours
+        valid_df = pd.concat([valid_df, pd.DataFrame([last_row])])
+    
+    # Extract arrays for integration
+    x = valid_df['relative_time_hours'].values
+    y = valid_df['macro_f1'].values
+    
+    # Compute AUC using trapezoidal rule
+    auc = trapezoid(y, x)
+    
+    # Normalize if requested (this gives average performance)
+    if normalize:
+        time_span = x[-1] - x[0]
+        if time_span > 0:
+            auc = auc / time_span
+    
+    return auc
 
+def calculate_time_to_threshold(valid_df: pd.DataFrame, global_max_f1: float, threshold_percent: float) -> Optional[float]:
+    """
+    Calculate time (in hours) until macro_f1 reaches threshold_percent% of global_max_f1.
+    Returns None if the threshold is never reached.
+    """
+    if valid_df.empty or global_max_f1 is None or np.isnan(global_max_f1):
+        return None
+    
+    valid_df = valid_df.sort_values("timestamp")
+    start_time = valid_df["timestamp"].min()
+    target_f1 = global_max_f1 * (threshold_percent / 100.0)
+    
+    # Find if/when we cross the threshold
+    threshold_rows = valid_df[valid_df["macro_f1"] >= target_f1].copy()
+    if threshold_rows.empty:
+        # Use 24.0 hours as the default when the threshold isn’t reached
+        return 24  # Threshold never reached
+    
+    first_threshold_time = threshold_rows["timestamp"].min()
+    time_to_threshold = (first_threshold_time - start_time).total_seconds() / 3600.0
+    return time_to_threshold
 
-class ExperimentGroupPlot:
-    """A group of experiments with visualization properties"""
-    def __init__(
-        self,
-        alias_name: str,
-        linestyle: str,
-        color: str,
-        dataframes: List[pd.DataFrame],
-    ):
-        self.alias_name = alias_name
-        self.linestyle = linestyle
-        self.dataframes = dataframes
-        self.color = color
+def compute_convergence_rate(valid_df: pd.DataFrame) -> float:
+    """
+    A simple measure of how quickly improvements happen.
+    For example, compute the slope of macro_f1 with respect to time in the first half of training.
+    Return np.nan if insufficient data.
+    """
+    if valid_df.empty:
+        return np.nan
+    # Sort by timestamp
+    valid_df = valid_df.sort_values('timestamp')
+    valid_df['relative_time_hours'] = (valid_df['timestamp'] - valid_df['timestamp'].min()).dt.total_seconds() / 3600.0
+    half_time = 12.0  # first half = first 12 hours
+    df_half = valid_df[valid_df["relative_time_hours"] <= half_time]
+    if len(df_half) < 2:
+        return np.nan
+    # Basic linear approximation: slope = (f1_end - f1_start) / (time_end - time_start)
+    f1_start = df_half.iloc[0]['macro_f1']
+    f1_end = df_half.iloc[-1]['macro_f1']
+    t_start = df_half.iloc[0]['relative_time_hours']
+    t_end = df_half.iloc[-1]['relative_time_hours']
+    if (t_end - t_start) == 0:
+        return np.nan
+    return (f1_end - f1_start) / (t_end - t_start)
 
 
 class EffectSizeCalculator:
@@ -77,10 +169,14 @@ class MultipleComparisonHandler:
 
 
 class ExperimentHandler:
-    """Main handler for experiment analysis"""
-    def __init__(self, dataset_name: str, experiments_data: List[ExperimentGroupPlot], alpha: float = 0.05):
+    """
+        Main handler for single-objective experiment analysis.
+        Expects experiments_data as a dictionary mapping candidate names to a list of DataFrames
+        (each corresponding to a seed run).
+    """
+    def __init__(self, dataset_name: str, experiments_data: dict, alpha: float = 0.05):
         self.dataset_name = dataset_name
-        self.experiments_data = experiments_data
+        self.experiments_data = experiments_data # dict: candidate -> list[pd.DataFrame]
         self.alpha = alpha
         self.summary_df = None
         self.group_avg = None
@@ -116,39 +212,34 @@ class ExperimentHandler:
         self._run_statistical_analysis()
     
     def _build_summary_df(self) -> None:
-        """Builds the summary DataFrame from experiment data"""
         rows = []
         global_max_dict = self._compute_global_maxima()
-        
-        for group in self.experiments_data:
-            for i, df in enumerate(group.dataframes):
-                processed_row = self._process_single_experiment(
-                    df, group.alias_name, i, global_max_dict.get(i)
-                )
+        for candidate, df_list in self.experiments_data.items():
+            for i, df in enumerate(df_list):
+                try:
+                    processed_row = self._process_single_experiment(df, candidate, i, global_max_dict.get(i))
+                except Exception as e:
+                    print(f"Error processing candidate {candidate}, run {i}: {e}")
+                    continue
                 if processed_row:
                     rows.append(processed_row)
-        
         self.summary_df = pd.DataFrame(rows)
     
-    def _compute_global_maxima(self) -> Dict[int, float]:
-        """Computes global maximum F1 scores for each experiment index"""
+    def _compute_global_maxima(self) -> dict:
         global_max_dict = {}
-        for group in self.experiments_data:
-            for i, df in enumerate(group.dataframes):
+        for candidate, df_list in self.experiments_data.items():
+            for i, df in enumerate(df_list):
                 if "macro_f1" not in df.columns:
                     continue
                 df_valid = df[~df["macro_f1"].isin([np.nan, np.inf, -np.inf])]
                 if df_valid.empty:
                     continue
-                    
                 local_max = df_valid["macro_f1"].max()
                 if i not in global_max_dict or local_max > global_max_dict[i]:
                     global_max_dict[i] = local_max
         return global_max_dict
-    
-    def _process_single_experiment(self, df: pd.DataFrame, 
-                                 group_name: str, idx: int, 
-                                 global_max: float) -> Dict[str, Any]:
+
+    def _process_single_experiment(self, df: pd.DataFrame, candidate: str, run_idx: int, global_max: float) -> dict:
         """Process a single experiment DataFrame"""
         if df.empty or "macro_f1" not in df.columns:
             raise Exception("Invalid DataFrame")
@@ -162,42 +253,43 @@ class ExperimentHandler:
         valid_df["timestamp"] = pd.to_datetime(valid_df["timestamp"])
         
         return {
-            "group_name": group_name,
-            "df_index": idx,
+            "candidate": candidate,
+            "run_idx": run_idx,
             "max_f1": valid_df["macro_f1"].max(),
             "mean_f1": valid_df["macro_f1"].mean(),
             "std_f1": valid_df["macro_f1"].std(),
             "auc": compute_auc_over_time(valid_df),
             "convergence_rate": compute_convergence_rate(valid_df),
-            "time_to_max_hours": calculate_time_to_threshold(valid_df, global_max, 100.0),
             "time_to_50_hours": calculate_time_to_threshold(valid_df, global_max, 50),
             "time_to_75_hours": calculate_time_to_threshold(valid_df, global_max, 75),
             "time_to_90_hours": calculate_time_to_threshold(valid_df, global_max, 90),
-            "num_evaluations": len(valid_df),
-            "num_errors": len(df) - len(valid_df)
+            "num_evaluations": len(df),
+            "num_errors": len(df) - len(valid_df),
+            "error_ratio": (len(df) - len(valid_df)) / len(df)
         }
     
     def _compute_group_averages(self) -> None:
-        """Computes average metrics for each experiment group"""
-        self.group_avg = self.summary_df.groupby("group_name", as_index=False).agg({
-            "max_f1": ["mean", "std"],
-            "mean_f1": ["mean", "std"],
-            "auc": ["mean", "std"],
-            "convergence_rate": ["mean", "std"],
-            "time_to_max_hours": ["mean", "std"],
-            "time_to_50_hours": ["mean", "std"],
-            "time_to_75_hours": ["mean", "std"],
-            "time_to_90_hours": ["mean", "std"]
-        }).fillna(0)
+        if self.summary_df is not None and not self.summary_df.empty:
+            self.group_avg = self.summary_df.groupby("candidate", as_index=False).agg({
+                "max_f1": ["mean", "std"],
+                "mean_f1": ["mean", "std"],
+                "auc": ["mean", "std"],
+                "convergence_rate": ["mean", "std"],
+                "time_to_50_hours": ["mean", "std"],
+                "time_to_75_hours": ["mean", "std"],
+                "time_to_90_hours": ["mean", "std"],
+                "num_evaluations": ["mean"],
+                "num_errors": ["mean"],
+                "error_ratio": ["mean"],
+            }).fillna(0)
     
     def _run_statistical_analysis(self) -> None:
         """Executes all statistical tests with proper error control and validation"""
         metrics_to_analyze = {
             'performance': ['max_f1', 'mean_f1', 'std_f1'],
             'efficiency': ['auc', 'convergence_rate'],
-            'time_metrics': ['time_to_max_hours', 'time_to_50_hours',
-                            'time_to_75_hours', 'time_to_90_hours'],
-            'reliability': ['num_evaluations', 'num_errors']
+            'time_metrics': ['time_to_50_hours', 'time_to_75_hours', 'time_to_90_hours'],
+            'reliability': ['num_evaluations', 'num_errors', 'error_ratio']
         }
 
         self.statistical_results = {}
@@ -231,15 +323,10 @@ class ExperimentHandler:
         adjusted_pvalues = self._adjust_family_wise_error()
         
         # Update all p-values with adjusted values
-        p_value_idx = 0
         for metric_category in self.statistical_results:
             for metric in self.statistical_results[metric_category]:
                 if 'pairwise_tests' in self.statistical_results[metric_category][metric]:
-                    df = self.statistical_results[metric_category][metric]['pairwise_tests']
-                    n_tests = len(df)
-                    df['adjusted_p_value'] = adjusted_pvalues[p_value_idx:p_value_idx + n_tests]
-                    df['significant'] = df['adjusted_p_value'] < self.alpha
-                    p_value_idx += n_tests
+                    df['significant'] = df['p_value_adjusted'] < self.alpha
     
     def _run_repeated_measures_anova(self, metric: str) -> Dict[str, Any]:
         """Run repeated measures ANOVA test"""
@@ -248,8 +335,8 @@ class ExperimentHandler:
             rm_anova = AnovaRM(
                 data=self.summary_df,
                 depvar=metric,
-                subject='df_index',
-                within=['group_name']
+                subject='run_idx',
+                within=['candidate']
             ).fit()
             
             return {
@@ -269,8 +356,8 @@ class ExperimentHandler:
     def _test_normality(self, column: str = 'max_f1') -> Dict[str, Any]:
         """Test normality of data by group"""
         results = {}
-        for group in self.summary_df['group_name'].unique():
-            group_data = self.summary_df[self.summary_df['group_name'] == group][column].dropna()
+        for group in self.summary_df['candidate'].unique():
+            group_data = self.summary_df[self.summary_df['candidate'] == group][column].dropna()
             
             # Proceed with normality tests for adequate sample sizes
             shapiro_stat, shapiro_p = stats.shapiro(group_data)
@@ -295,7 +382,7 @@ class ExperimentHandler:
     def _run_friedman_test(self, metric: str) -> Dict[str, Any]:
         """Run Friedman test for specified metric"""
         groups = [group for _, group in 
-                self.summary_df.groupby('group_name')[metric]]
+                self.summary_df.groupby('candidate')[metric]]
         statistic, pvalue = stats.friedmanchisquare(*groups)
         return {
             'statistic': statistic,
@@ -306,13 +393,13 @@ class ExperimentHandler:
     def _run_pairwise_tests(self, metric: str) -> pd.DataFrame:
         """Run pairwise comparisons for specified metric"""
         results = []
-        groups = self.summary_df['group_name'].unique()
+        groups = self.summary_df['candidate'].unique()
         n_comparisons = len(groups) * (len(groups) - 1) // 2
         adjusted_alpha = self.alpha / n_comparisons
         
         for g1, g2 in itertools.combinations(groups, 2):
-            data1 = self.summary_df[self.summary_df['group_name'] == g1][metric]
-            data2 = self.summary_df[self.summary_df['group_name'] == g2][metric]
+            data1 = self.summary_df[self.summary_df['candidate'] == g1][metric]
+            data2 = self.summary_df[self.summary_df['candidate'] == g2][metric]
             
             if len(data1) < 2 or len(data2) < 2:
                 continue
@@ -352,23 +439,69 @@ class ExperimentHandler:
         }
     
     def save_results(self, output_path: str) -> None:
-        """Save all results to JSON with proper key conversion"""
+        """Saves all results to JSON with improved structure for group averages."""
+        def convert_numpy(obj):
+            if hasattr(obj, 'item'):
+                return obj.item()
+            elif isinstance(obj, dict):
+                return {k: convert_numpy(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy(i) for i in obj]
+            return obj
+        
+        def convert_to_serializable(obj):
+            if isinstance(obj, pd.DataFrame):
+                return obj.to_dict(orient='records')
+            elif isinstance(obj, dict):
+                return {k: convert_to_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_serializable(item) for item in obj]
+            else:
+                return obj
+
+        # and with columns like ('max_f1', 'mean') and ('max_f1', 'std'), etc.
+        # First, create an empty dictionary for the restructured group averages.
+        group_averages = {}
+        # Define the desired candidate order.
+        candidate_order = ["baseline", "low", "moderate", "high"]
+        
+        # Ensure the 'group_name' column exists and then set it as index to iterate rows easily.
+        df = self.group_avg.copy()
+        # When grouping, the candidate names should be in a column (not an index)
+        # So we assume self.group_avg['group_name'] contains the candidate names.
+        for candidate in candidate_order:
+            candidate_df = df[df['candidate'] == candidate]
+            if candidate_df.empty:
+                continue
+            candidate_row = candidate_df.iloc[0]
+            metrics = {}
+            # Iterate over the columns; skip the candidate column itself.
+            for col in df.columns:
+                if col == 'candidate':
+                    continue
+                # If the metric columns are multi-index (e.g., ('max_f1', 'mean')), unpack them.
+                if isinstance(col, tuple):
+                    metric, stat = col
+                    metrics.setdefault(metric, {})[stat] = candidate_row[col]
+                else:
+                    metrics[col] = candidate_row[col]
+            group_averages[candidate] = metrics
+
+        # Build the final results dictionary.
         results = {
             "dataset": self.dataset_name,
-            "group_averages": self.group_avg.to_dict(),
+            "group_averages": group_averages,
             "statistical_analysis": self.statistical_results
         }
         
-        flattened_data = {}
-        for key, value in results.items():
-            if isinstance(value, dict):
-                for subkey, subvalue in value.items():
-                    flattened_data[f"{key}_{subkey}"] = subvalue
-            else:
-                flattened_data[key] = value
-        
-        df = pd.DataFrame([flattened_data])
-        df.to_json(output_path, orient='records', indent=2)
+        results = convert_numpy(results)
+        results = convert_to_serializable(results)
+
+        # Write out the JSON file in an indented format.
+        import json
+        with open(output_path, 'w') as fout:
+            json.dump(results, fout, indent=2)
+
         
     def generate_report(self) -> str:
         """Generate a comprehensive statistical report"""
@@ -451,44 +584,31 @@ class ExperimentHandler:
     def _validate_independence(self, metric: str) -> None:
         """Check for independence between samples"""
         correlations = []
-        for g1, g2 in itertools.combinations(self.summary_df['group_name'].unique(), 2):
-            data1 = self.summary_df[self.summary_df['group_name'] == g1][metric]
-            data2 = self.summary_df[self.summary_df['group_name'] == g2][metric]
+        for g1, g2 in itertools.combinations(self.summary_df['candidate'].unique(), 2):
+            data1 = self.summary_df[self.summary_df['candidate'] == g1][metric]
+            data2 = self.summary_df[self.summary_df['candidate'] == g2][metric]
             corr = stats.pearsonr(data1, data2)[0]
             correlations.append(corr)
         
         if np.mean(np.abs(correlations)) > 0.3:
             warnings.warn("High correlation between groups detected. Consider using dependent samples tests.")
 
-
 def main():
     """Main function to run the analysis pipeline"""
     # Initialize the DataLoader with the single-objective candidates configuration.
-    loader = DataLoader("experiments/configs/single-objective/candidates.yaml",
-                      "experiments/data/experience_store")
+    loader = DataLoader("/home/coder/autogoal/experiments/configs/single-objective/candidates.yaml",
+                      "/home/coder/autogoal/experiments/data/experience_store")
     
-    for dataset in ['liar', 'sst2', 'meld', 'ag_news']:
+    datasets = ['liar', 'sst2']
+    for dataset in datasets:
         print(f"Processing dataset: {dataset}")
-        dataset_dict = loader.load_all_data_for_dataset(dataset)
-        
-        # Prepare experiment groups for analysis
-        experiments_data = []
-        for bias_level, candidate_dict in dataset_dict.items():
-            if bias_level == 'baseline':
-                experiments_data.append(ExperimentGroupPlot(bias_level, "-", "blue", [candidate_dict]))
-            else:
-                for candidate, candidate_data in candidate_dict.items():
-                    alias_name = f"{bias_level} - {candidate}"
-                    experiments_data.append(ExperimentGroupPlot(alias_name, "-", "green", [candidate_data]))
-        
-        # Process experiments and save results
+        # Directly load a dictionary mapping candidate names to their list of DataFrames (one per seed)
+        experiments_data = loader.load_all_data_for_single_objective_dataset(dataset)
+        # Create ExperimentHandler using the loaded experiments_data
         handler = ExperimentHandler(dataset, experiments_data)
         handler.process_experiments()
-        
-        results_path = f"experiments/output/single-objective-analysis/{dataset}_experiment_summary.json"
+        results_path = f"/home/coder/autogoal/experiments/output/single-objective-analysis/{dataset}_experiment_summary.json"
         handler.save_results(results_path)
-        print(handler.generate_report())
-
 
 if __name__ == "__main__":
     main()
