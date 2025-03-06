@@ -1,5 +1,4 @@
 import multiprocessing
-from statistics import mean
 import psutil
 import pynvml
 import time

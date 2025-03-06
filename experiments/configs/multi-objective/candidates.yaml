@@ -1,52 +1,59 @@
 liar:
+  baseline: "liar"
   low:
-    liar: "liar_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
-    median: "liar_warmstart_id_(no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "liar_warmstart_id_(no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "liar_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
+    median: "liar_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "liar_warmstart (no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
   moderate:
-    liar: "liar_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
-    median: "liar_warmstart_id_(a-pos a-neg euc k=0.5)[F1+Time][weighted_sum] (seed_42)"
-    max: "liar_warmstart_id_(no-pos f-neg cos k=0.5)[F1+Time][weighted_sum] (seed_42)"
+    liar: "liar_warmstart (f-pos + a-neg)[F1+Time] (seed_42)"
+    median: "liar_warmstart (a-pos a-neg euc k=0.5)[F1+Time][weighted_sum] (seed_42)"
+    max: "liar_warmstart (no-pos f-neg cos k=0.5)[F1+Time][weighted_sum] (seed_42)"
   high:
-    liar: "liar_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
-    median: "liar_warmstart_id_(no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "liar_warmstart_id_(f-pos f-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "liar_warmstart (f-pos f-neg)[F1+Time] (seed_42)"
+    median: "liar_warmstart (no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "liar_warmstart (f-pos f-neg)[F1+Time][weighted_sum] (seed_42)"
+
 sst2:
+  baseline: "sst2"
   low:
-    liar: "sst2_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
-    median: "sst2_warmstart_id_(no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "sst2_warmstart_id_(no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "sst2_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
+    median: "sst2_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "sst2_warmstart (no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
   moderate:
-    liar: "sst2_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
-    median: "sst2_warmstart_id_(a-pos no-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "sst2_warmstart_id_(f-pos a-neg)[F1+Time][logarithmic_front] (seed_42)"
+    liar: "sst2_warmstart (f-pos + a-neg)[F1+Time] (seed_42)"
+    median: "sst2_warmstart (a-pos no-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "sst2_warmstart (f-pos a-neg)[F1+Time][logarithmic_front] (seed_42)"
   high:
-    liar: "sst2_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
-    median: "sst2_warmstart_id_(a-pos f-neg euc k=0.5)[F1+Time][weighted_sum] (seed_42)"
-    max: "sst2_warmstart_id_(no-pos f-neg cos k=0.5)[F1+Time][weighted_sum] (seed_42)"
+    liar: "sst2_warmstart (f-pos f-neg)[F1+Time] (seed_42)"
+    median: "sst2_warmstart (a-pos f-neg euc k=0.5)[F1+Time][weighted_sum] (seed_42)"
+    max: "sst2_warmstart (no-pos f-neg cos k=0.5)[F1+Time][weighted_sum] (seed_42)"
+
 meld:
+  baseline: "meld"
   low:
-    liar: "meld_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
-    median: "meld_warmstart_id_(no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "meld_warmstart_id_(no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "meld_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
+    median: "meld_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "meld_warmstart (no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
   moderate:
-    liar: "meld_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
-    median: "meld_warmstart_id_(a-pos no-neg cos k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "meld_warmstart_id_(no-pos f-neg euc k=1)[F1+Time][weighted_sum] (seed_42)"
+    liar: "meld_warmstart (f-pos + a-neg)[F1+Time] (seed_42)"
+    median: "meld_warmstart (a-pos no-neg cos k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "meld_warmstart (no-pos f-neg euc k=1)[F1+Time][weighted_sum] (seed_42)"
   high:
-    liar: "meld_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
-    median: "meld_warmstart_id_(no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "meld_warmstart_id_(f-pos f-neg)[F1+Time][logarithmic_front] (seed_42)"
+    liar: "meld_warmstart (f-pos f-neg)[F1+Time] (seed_42)"
+    median: "meld_warmstart (no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "meld_warmstart (f-pos f-neg)[F1+Time][logarithmic_front] (seed_42)"
+
 ag_news:
+  baseline: "ag_news"
   low:
-    liar: "ag_news_warmstart_id_(f-pos cos k=0.5)[F1+Time] (seed_42)"
-    median: "ag_news_warmstart_id_(no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "ag_news_warmstart_id_(no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "ag_news_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
+    median: "ag_news_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "ag_news_warmstart (no-pos a-neg)[F1+Time][weighted_sum] (seed_42)"
   moderate:
-    liar: "ag_news_warmstart_id_(f-pos + a-neg)[F1+Time] (seed_42)"
-    median: "ag_news_warmstart_id_(a-pos + no-neg cos k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "ag_news_warmstart_id_(f-pos + a-neg)[F1+Time][logarithmic_front] (seed_42)"
+    liar: "ag_news_warmstart (f-pos + a-neg)[F1+Time] (seed_42)"
+    median: "ag_news_warmstart (a-pos + no-neg cos k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "ag_news_warmstart (f-pos + a-neg)[F1+Time][logarithmic_front] (seed_42)"
   high:
-    liar: "ag_news_warmstart_id_(f-pos f-neg)[F1+Time] (seed_42)"
-    median: "ag_news_warmstart_id_(no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
-    max: "ag_news_warmstart_id_(no-pos f-neg)[F1+Time][weighted_sum] (seed_42)"
+    liar: "ag_news_warmstart (f-pos f-neg)[F1+Time] (seed_42)"
+    median: "ag_news_warmstart (no-pos f-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
+    max: "ag_news_warmstart (no-pos f-neg)[F1+Time][weighted_sum] (seed_42)"

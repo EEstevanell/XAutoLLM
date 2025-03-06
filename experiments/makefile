@@ -1,3 +1,6 @@
+run-baseline:
+	python src\baseline-experiments.py
+
 run-single-objective:
 	python src\single-objective-experiments.py
 
@@ -9,3 +12,4 @@ visualise:
 
 run-statistical-tests:
 	python src\statistics\__init__.py
+	

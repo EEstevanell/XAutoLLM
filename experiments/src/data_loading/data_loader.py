@@ -97,9 +97,13 @@ class DataLoader:
         
         for complexity in dataset_configs:
             all_data[complexity] = {}
-            for method in dataset_configs[complexity]:
-                alias_name = dataset_configs[complexity][method]
-                all_data[complexity][method] = self.load_data_for_alias(alias_name)
+            if complexity == "baseline":
+                alias_name = dataset_configs[complexity]
+                all_data[complexity] = self.load_data_for_alias(alias_name)
+            else:
+                for method in dataset_configs[complexity]:
+                    alias_name = dataset_configs[complexity][method]
+                    all_data[complexity][method] = self.load_data_for_alias(alias_name)
 
         return all_data
 

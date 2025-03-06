@@ -18,6 +18,9 @@
 # Change ownership of datasets folder
 sudo chown -R coder:coder /home/coder/autogoal
 
+# Add experiments folder to PYTHONPATH in order to reproduce results effectively
+export PYTHONPATH="/home/coder/autogoal/experiments:/home/coder/autogoal/experiments/src:$PYTHONPATH"
+
 export PS1="\[\e[31m\]autogoal-docker\[\e[m\] \[\e[33m\]\w\[\e[m\] > "
 export TERM=xterm-256color
 alias grep="grep --color=auto"
