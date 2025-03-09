@@ -121,7 +121,14 @@ class ExperimentConfigGenerator:
             return {"random_seed": random_seed}
         
         # Get the full configuration from WarmstartConfigParser
-        return WarmstartConfigParser.parse(candidate_str, dataset_name)
+        config = WarmstartConfigParser.parse(candidate_str, dataset_name)
+        
+        # For single-objective experiments, we enforce the weights regardless of parser output
+        if self.experiment_type == 'single':
+            config['f1_weight'] = 1
+            config['evaluation_time_weight'] = 0
+            
+        return config
     
     def generate_dataset_configs(self, dataset: str, bias: str, method: Optional[str] = None) -> List[Dict[str, Any]]:
         """

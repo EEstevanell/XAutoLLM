@@ -242,7 +242,7 @@ class ExperimentExecutor:
                 normalizers=config.get(
                     "normalizers", [LogNormalizer(), MinMaxNormalizer()]
                 ),
-                exclude=f"{config.get('exclude', '')}|_warmstart",
+                exclude=f"{config.get('exclude', '')}|_warmstart|seed", # Exclude all experience with warmstart or seed in its name
                 include=config.get("include", None),
                 beta_scale=config.get("beta_scale", 1.0),
                 beta=config.get("beta", None),
@@ -283,8 +283,9 @@ class ExperimentExecutor:
                 random_state=seed,
                 registry=algorithm_registry,
                 evaluation_timeout=1.5 * Hour,
-                search_timeout=24 * Hour,
                 memory_limit=35 * Gb,
+                # multi-objective baseline uses 48 hours for search timeout
+                search_timeout=48 * Hour if is_baseline and experiment_type == "multi" else 24 * Hour,
                 cross_validation_steps=2,
                 stratified_cross_validation=True,
                 # Objective functions. Multi-objective experiments use macro_f1_plain and evaluation_time
@@ -328,6 +329,7 @@ class ExperimentExecutor:
     def execute_experiments_in_batches(self) -> List[Dict[str, Any]]:
         """
         Execute all experiments in batches based on available CUDA devices.
+        Ensures baseline experiments are executed first.
 
         Returns:
             List of experiment results
@@ -338,7 +340,11 @@ class ExperimentExecutor:
         else:  # multi
             self.experiments = self.load_multi_objective_configs()
 
+        # Sort experiments to ensure baselines run first
+        self.experiments.sort(key=lambda x: (not x["is_baseline"], x["dataset"]))
+
         logger.info(f"Loaded {len(self.experiments)} experiment configurations")
+        logger.info(f"Baseline experiments will be executed first")
 
         # Track results
         all_results = []

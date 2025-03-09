@@ -2,6 +2,13 @@
 
 This directory contains all the resources, code, and data needed to reproduce the experimental results presented in our paper for ACL 2025.
 
+## Repository Access
+
+For anonymous peer review, the code is available at the following repository:
+```
+https://anonymous.4open.science/r/XAutoLLM-A010
+```
+
 ## Directory Structure
 
 ```
@@ -12,20 +19,26 @@ experiments/
 │   └── single-objective/         # Configurations for single-objective optimization experiments
 │       └── candidates.yaml       # Candidate selection methods per dataset and bias level
 ├── data/                         # Experimental data
-│   ├── experience_store/         # Stored experience data from previous search runs
+│   ├── experience_store/         # Pre-collected experience data for analysis (not where new experience is generated)
 │   ├── initial_bias_configurations/ # Initial bias configurations for meta-learning parameter combinations
 │   └── rename_script.py          # Utility script for renaming data files
 ├── makefile                      # Automation scripts for running experiments
 ├── Readme.md                     # This file
+├── output/                       # Output directory for experiment results
+│   ├── logs/                     # Log files for each experiment run
+│   └── experiment_summary.json   # Summary of all executed experiments
 └── src/                          # Source code for experiments
     ├── __init__.py
     ├── analysis/                 # Code for analyzing experimental results
+    │   ├── multi_objective/      # Multi-objective analysis scripts
+    │   │   └── main.py           # Main entry point for multi-objective analysis
+    │   └── single_objective/     # Single-objective analysis scripts
+    │       └── main.py           # Main entry point for single-objective analysis
     ├── data_loading/             # Code for loading and preprocessing datasets
+    ├── execute_experiments.py    # Main experiment execution script
+    ├── experiment_config_generator.py # Generates experiment configurations
     ├── general_experiment.py     # Common experiment functionality
     ├── metrics/                  # Implementation of evaluation metrics
-    ├── multi-objective-experiments.py  # Multi-objective optimization experiments
-    ├── single-objective-experiments.py # Single-objective optimization experiments
-    ├── statistical_tests/        # Statistical significance testing
     └── visualisations/           # Code for generating figures and visualizations
 ```
 
@@ -35,13 +48,20 @@ To run these experiments, you need to have AutoGOAL installed with all required 
 
 ```bash
 # Clone the repository if you haven't already
-git clone https://github.com/your-username/autogoal.git
-cd autogoal
+git clone https://anonymous.4open.science/r/XAutoLLM-A010.git
+cd XAutoLLM-A010
 
 # Install main package and dependencies
 pip install -e .
 pip install -e .[contrib]  # For optional dependencies
+
+# Install XAutoLLM specific dependencies
+pip install -r experiments/requirements.txt
 ```
+
+## Hardware Requirements
+
+The experiments require CUDA-capable GPUs for the transformer-based models. The execution framework will automatically detect available CUDA devices and distribute experiments accordingly.
 
 ## Experiment Configuration
 
@@ -51,7 +71,7 @@ The experiment configurations are organized in the `configs/` directory, with se
 
 Both `multi-objective` and `single-objective` directories contain a `candidates.yaml` file that specifies:
 
-- Different datasets used in experiments (e.g., "liar")
+- Different datasets used in experiments (e.g., "liar", "sst2", "ag_news", "meld")
 - Different bias levels (baseline, low, moderate, high)
 - Candidate selection methods (liar, median, max)
 - Specific configurations for each combination
@@ -70,53 +90,89 @@ dataset_name:
 
 The `data/` directory contains:
 
-1. **experience_store**: Contains subdirectories named according to the configurations in `candidates.yaml`, each storing the experience (evaluations) generated during the search process for that specific configuration.
+1. **experience_store**: Contains pre-collected experience data for analysis purposes. Note that when executing experiments, new experience will be generated in the default location (`/home/coder/.autogoal/data/experience_store`).
 
 2. **initial_bias_configurations**: Stores different bias levels for meta-learning parameter combinations used in the multi-objective experiments.
 
+## Experience Store Information
+
+**IMPORTANT:** There are two different experience store locations used in this framework:
+
+1. **Default Experience Store** (`/home/coder/.autogoal/data/experience_store`):
+   - This is where new experiences are generated when running experiments with `run-multi-objective` and `run-single-objective` commands.
+   - The execute_experiments.py script writes to this location.
+
+2. **Analysis Experience Store** (`/home/coder/autogoal/experiments/data/experience_store`):
+   - This location contains pre-collected experience data used by the analysis scripts.
+   - The multi-objective and single-objective result analysis scripts read from this location.
+
+After running experiments, you can use `make copy-experiences` to copy the newly generated experiences from the default location to the analysis location if you want to include them in your analysis.
+
 ## Running Experiments
 
-The experiments are orchestrated through the makefile, which provides several targets:
+The experiments are orchestrated through the makefile, which provides several targets. **Note that multi-objective experiments always run first, followed by single-objective experiments.**
 
 ```bash
-# Run all experiments
+# Run all experiments (multi-objective first, then single-objective) and analyze results
 make all
 
 # Run only multi-objective experiments
-make multi-objective
+make run-multi-objective
 
 # Run only single-objective experiments
-make single-objective
+make run-single-objective
 
-# Run specific experiments (e.g., for a particular dataset)
-make run EXPERIMENT=experiment_name
+# Run all experiments in the correct order
+make run-experiments
 
-# Generate all figures and tables for the paper
-make figures
+# Analyze multi-objective experiment results
+make analyze-multi-objective
+
+# Analyze single-objective experiment results
+make analyze-single-objective
+
+# Analyze all experiment results
+make analyze-results
+
+# Copy experiences from default location to analysis location
+make copy-experiences
 
 # Clean generated results
 make clean
 ```
 
+### Experiment Execution Details
+
+Experiments are executed using the `execute_experiments.py` script, which:
+
+1. Detects available CUDA devices and distributes experiments across them
+2. Allocates CPU cores appropriately for each experiment
+3. Manages experiment logs in the `output/logs/` directory
+4. Ensures that baseline experiments are executed first (for generating the initial experience for the warmstart candidates)
+5. Tracks experiment execution status and generates a summary
+
 ## Result Analysis
 
-After running experiments, results are processed using the analysis scripts in `src/analysis/`. The statistical significance of results is assessed using the tests implemented in `src/statistical_tests/`.
+After running experiments, the results are processed using the analysis modules:
 
-Visualizations and figures for the paper are generated using the code in `src/visualisations/`.
+1. `analyze-multi-objective` - Runs the multi-objective analysis using `src/analysis/multi_objective/main.py`
+2. `analyze-single-objective` - Runs the single-objective analysis using `src/analysis/single_objective/main.py`
+
+Both analysis modules use the pre-collected experience data in `experiments/data/experience_store` for their analysis.
 
 ## Reproducing Paper Results
 
 To reproduce all the results presented in our ACL 2025 paper:
 
 ```bash
-# Run all experiments and generate all figures
+# Run all experiments and analyze results
 make paper
 ```
 
 This command will:
-1. Run all necessary experiments
-2. Perform statistical analysis on the results
-3. Generate all figures and tables as presented in the paper
+1. Run multi-objective experiments first 
+2. Run single-objective experiments
+3. Analyze the results using the appropriate analysis modules
 
 ## License
 

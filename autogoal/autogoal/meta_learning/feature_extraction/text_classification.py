@@ -16,7 +16,14 @@ class TextClassificationFeatureExtractor(FeatureExtractor):
             raise ImportError("Scikit-learn not installed. Please install via 'pip install scikit-learn'.") from e
         
         try:
+            import nltk
             from nltk.corpus import stopwords
+            try:
+                # Check if stopwords are available
+                stopwords.words('english')
+            except LookupError:
+                # Download stopwords if not already available
+                nltk.download('stopwords', quiet=True)
         except ImportError as e:
             raise ImportError("NLTK not installed. Please install via 'pip install nltk'.") from e
         
