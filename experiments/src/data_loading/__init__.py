@@ -8,6 +8,23 @@ import re
 
 class WarmstartConfigParser:
     @staticmethod
+    def extract_seed(config_str: str) -> int:
+        """
+        Extract the random seed from a configuration string.
+        
+        Args:
+            config_str: Configuration string containing the seed
+            
+        Returns:
+            The seed as an integer, or 42 as default if no seed found
+        """
+        # Match the pattern "seed_X" or "(seed_X)" where X is a number
+        seed_match = re.search(r'seed_(\d+)', config_str)
+        if seed_match:
+            return int(seed_match.group(1))
+        return 42  # Default seed if not found
+
+    @staticmethod
     def parse(config_str: str, dataset_name: str = None) -> dict:
         """
         Parse a warmstart candidate configuration string and return a
@@ -65,6 +82,9 @@ class WarmstartConfigParser:
             square_matches[1].strip() if len(square_matches) >= 2 else "weighted_sum"
         )
 
+        # Extract seed value from config string
+        random_seed = WarmstartConfigParser.extract_seed(config_str)
+
         # Build final warmstart configuration dictionary
         config_dict = {
             "k_pos": k_pos,
@@ -81,6 +101,7 @@ class WarmstartConfigParser:
             "evaluation_time_weight": 0.5,
             "exclude": f"{(dataset_name + '|') if dataset_name is not None else ''}warmstart",
             "utility_function": utility_function,
+            "random_seed": random_seed,
         }
         return config_dict
 
