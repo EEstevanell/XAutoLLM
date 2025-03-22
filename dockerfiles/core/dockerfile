@@ -4,6 +4,10 @@
 
 FROM python:3.9.16
 
+# Pass in user/group info as build args
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 # =====================
 # Basic enviroment setup
 # ---------------------
@@ -24,7 +28,23 @@ RUN apt-get update && apt-get install -y \
     git \
     make \
     gcc \
+    # Adding Slurm dependencies
+    munge \
+    libmunge-dev \
+    libslurm-dev \
  && rm -rf /var/lib/apt/lists/*
+
+# =====================
+# Slurm compatibility setup
+# ---------------------
+# Set environment variables for Slurm
+ENV SLURM_CONF=/etc/slurm/slurm.conf
+ENV PATH=$PATH:/usr/local/bin:/usr/bin:/bin
+
+# Create directories needed for Slurm logs and state
+RUN mkdir -p /var/spool/slurmd \
+    && mkdir -p /var/log/slurm \
+    && mkdir -p /var/run/slurm
 
 # =====================
 # User stuff
@@ -36,10 +56,11 @@ RUN sed -i "s/# en_US.UTF-8/en_US.UTF-8/" /etc/locale.gen \
 ENV LANG=en_US.UTF-8
 ENV SHELL=/bin/bash
 
-RUN adduser --gecos '' --disabled-password coder \
-  && echo "coder:admin-coder" | chpasswd \
-  # && echo "coder ALL=(ALL) ALL" >> /etc/sudoers.d/sudouser \
-  && usermod -s /bin/bash coder
+# Create user with the provided USER_ID/GROUP_ID (or default to 1000)
+RUN groupadd -g $GROUP_ID usergroup || groupmod -g $GROUP_ID usergroup || true \
+    && useradd -m -u $USER_ID -g $GROUP_ID coder || usermod -u $USER_ID -g $GROUP_ID coder \
+    && echo "coder:admin-coder" | chpasswd \
+    && usermod -s /bin/bash coder
 
 # ==========================================
 # Project-specific installation instruction
@@ -61,11 +82,10 @@ RUN pip install poetry==1.8.4
 RUN poetry config virtualenvs.create false
 
 SHELL ["/bin/bash", "-c"]
-RUN mkdir -p /home/coder/autogoal/data && rm -rf /home/coder/autogoal/storage && chown -R coder:coder /home/coder/autogoal
+RUN mkdir -p /home/coder/autogoal/data && rm -rf /home/coder/autogoal/storage && mkdir -p /home/coder/autogoal/storage && chown -R coder:usergroup /home/coder/autogoal
 
 # Set permissions for important directories
-RUN chown -R coder /home/coder
-RUN chown -R coder /opt/dev/cache
+RUN mkdir -p /opt/dev/cache && chown -R coder:usergroup /home/coder /opt/dev/cache
 
 # Copy code-base for autogoal-core
 COPY autogoal/ /home/coder/autogoal/autogoal
@@ -84,14 +104,28 @@ COPY dockerfiles/install-package.sh /home/coder/autogoal/install-package.sh
 
 # Fix line endings
 RUN find /home/coder/autogoal -type f \
-    -exec sed -i 's/\r$//' {} \;
+    -exec sed -i 's/\r$//' {} \; || true
 
 RUN chmod +x install-package.sh && ./install-package.sh core contrib sklearn nltk transformers telegram
 
 # Allow 'coder' to use sudo without a password
 RUN echo "coder ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/coder && sudo chmod 0440 /etc/sudoers.d/coder
 
-# Finally switch to coder so at runtime the user must supply the password for sudo:
+# =====================
+# GPU and Slurm compatibility
+# ---------------------
+# Create a script to check for GPU availability
+RUN echo '#!/bin/bash\nif [ -x "$(command -v nvidia-smi)" ]; then\n  nvidia-smi\nelse\n  echo "No GPU found"\nfi' > /usr/local/bin/check-gpu.sh \
+    && chmod +x /usr/local/bin/check-gpu.sh
+
+# Create a wrapper script for handling Slurm environment variables
+RUN echo '#!/bin/bash\necho "Running with Slurm job ID: $SLURM_JOB_ID"\necho "Running on node: $SLURM_NODELIST"\necho "Running with GPU index: $SLURM_IDX"\necho "Checking GPU:"\n/usr/local/bin/check-gpu.sh\nexec "$@"' > /usr/local/bin/slurm-wrapper.sh \
+    && chmod +x /usr/local/bin/slurm-wrapper.sh
+
+# Set ownership of all files to the correct user
+RUN chown -R coder:usergroup /home/coder
+
+# Finally switch to coder user
 USER coder
 VOLUME /home/coder/autogoal
 

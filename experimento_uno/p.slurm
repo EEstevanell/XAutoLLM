@@ -20,6 +20,6 @@ R=`pwd`
 docker build --no-cache --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) -t pytorch-train3 .
 #docker run --name $SLURM_JOB_ID --shm-size=1g --gpus device=$SLURM_IDX --rm -v $R:/workspace -e SCRIPT=/workspace/experiments/kan_heads/Code/polynomials/experiment_seeds_1.py pytorch-train python3 /workspace/experiments/kan_heads/Code/polynomials/experiment_seeds_1.py
 #docker run --name $SLURM_JOB_ID --shm-size=1g --gpus device=$SLURM_IDX --rm -v $R:/workspace  pytorch-train3 
-docker run --name $SLURM_JOB_ID --shm-size=1g --gpus device=$SLURM_IDX --rm -v /home/gplsi/fabio:/workspace  pytorch-train3
+docker run --name $SLURM_JOB_ID --shm-size=1g --gpus device=$SLURM_IDX --rm -v /home/gplsi/ernesto:/workspace  pytorch-train3
 docker rmi pytorch-train3
 echo "Trabajo finalizado a las `date`"
