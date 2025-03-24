@@ -146,14 +146,6 @@ def execute_experiment():
         device = torch.device("cpu")
         logger.info("CUDA not available. Using CPU.")
     
-    # Set threading environment variables for better performance
-    os.environ["OMP_NUM_THREADS"] = "8"
-    os.environ["MKL_NUM_THREADS"] = "8"
-    os.environ["NUMEXPR_NUM_THREADS"] = "8"
-    os.environ["OPENBLAS_NUM_THREADS"] = "8"
-    os.environ["VECLIB_MAXIMUM_THREADS"] = "8"
-    os.environ["BLIS_NUM_THREADS"] = "8"
-    
     # Load dataset
     dataset = IBERMATDataset()
     X_train, y_train, X_test, y_test = dataset.load()
@@ -195,12 +187,12 @@ def execute_experiment():
         input=(Seq[Sentence], Supervised[VectorDiscrete]),
         output=VectorDiscrete,
         registry=algorithm_registry,
-        objectives=[macro_f1_plain],  # Using macro F1 score as primary metric
+        objectives=macro_f1_plain,  # Using macro F1 score as primary metric
         observations=[
             ("Accuracy", accuracy),
             ("Evaluation Time", evaluation_time)
         ],
-        maximize=(True,),  # Maximize F1 score
+        maximize=True,  # Maximize F1 score
         search_algorithm=NSPESearch,  # Using Population-based Evolutionary Search
         search_timeout=TIME_BUDGET,
         random_state=RANDOM_SEED,

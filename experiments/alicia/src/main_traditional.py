@@ -12,6 +12,7 @@ Usage:
 import os
 import sys
 import logging
+from autogoal.kb._semantics import VectorCategorical
 from autogoal.search._nspge import NSPESearch
 import pandas as pd
 import numpy as np
@@ -96,14 +97,12 @@ class IBERMATDataset(Dataset):
         labels = df["CLASS"].tolist()
         
         # Encode labels: HUMAN -> 0, MACHINE -> 1
-        label_mapping = {"HUMAN": 0, "MACHINE": 1}
-        y = np.array([label_mapping[label] for label in labels])
+        y = np.array(labels)
         
         # Print class distribution
         unique_labels, counts = np.unique(y, return_counts=True)
         for label, count in zip(unique_labels, counts):
-            label_name = "HUMAN" if label == 0 else "MACHINE"
-            logger.info(f"Class {label_name} ({label}): {count} samples ({count/len(y)*100:.2f}%)")
+            logger.info(f"Class {label}: {count} samples ({count/len(y)*100:.2f}%)")
         
         # Create train/test split (80% train, 20% test)
         X_train, X_test, y_train, y_test = train_test_split(
@@ -150,8 +149,8 @@ def execute_experiment():
     
     # Initialize AutoML
     automl = AutoML(
-        input=(Seq[Sentence], Supervised[VectorDiscrete]),
-        output=VectorDiscrete,
+        input=(Seq[Sentence], Supervised[VectorCategorical]),
+        output=VectorCategorical,
         registry=algorithm_registry,
         objectives=macro_f1_plain,  # Using macro F1 score as primary metric
         observations=[
