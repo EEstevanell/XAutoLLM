@@ -124,20 +124,13 @@ def execute_experiment():
     # Set random seeds for reproducibility
     set_seeds()
     
-    # Set threading environment variables for better performance
-    os.environ["OMP_NUM_THREADS"] = "8"
-    os.environ["MKL_NUM_THREADS"] = "8"
-    os.environ["NUMEXPR_NUM_THREADS"] = "8"
-    os.environ["OPENBLAS_NUM_THREADS"] = "8"
-    os.environ["VECLIB_MAXIMUM_THREADS"] = "8"
-    os.environ["BLIS_NUM_THREADS"] = "8"
-    
     # Load dataset
     dataset = IBERMATDataset()
     X_train, y_train, X_test, y_test = dataset.load()
     
+    import autogoal_nltk, autogoal_sklearn
     # Find appropriate algorithm classes for text classification
-    algorithm_registry = find_classes(exclude="transformers")
+    algorithm_registry = find_classes(modules=[autogoal_nltk, autogoal_sklearn])
     
     logger.info(f"Found {len(algorithm_registry)} algorithm implementations for text classification")
     
@@ -160,18 +153,18 @@ def execute_experiment():
         input=(Seq[Sentence], Supervised[VectorDiscrete]),
         output=VectorDiscrete,
         registry=algorithm_registry,
-        objectives=[macro_f1_plain],  # Using macro F1 score as primary metric
+        objectives=macro_f1_plain,  # Using macro F1 score as primary metric
         observations=[
             ("Accuracy", accuracy),
             ("Evaluation Time", evaluation_time)
         ],
-        maximize=(True,),  # Maximize F1 score
+        maximize=True,  # Maximize F1 score
         search_algorithm=NSPESearch,  # Using Population-based Evolutionary Search
         search_timeout=TIME_BUDGET,
         random_state=RANDOM_SEED,
         memory_limit=MEMORY_LIMIT * Mb,
         evaluation_timeout=EVAL_TIMEOUT,
-        cross_validation_steps=2,
+        cross_validation_steps=1,
     )
     
     # Run the experiment
@@ -211,7 +204,7 @@ def execute_experiment():
                 "time_budget": TIME_BUDGET,
                 "eval_timeout": EVAL_TIMEOUT,
                 "memory_limit": MEMORY_LIMIT,
-                "cross_validation_steps": 3
+                "cross_validation_steps": 2
             }
         }
         
