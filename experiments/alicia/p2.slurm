@@ -2,9 +2,9 @@
 #SBATCH --job-name=ibermat    # Name of the job
 #SBATCH --output=%j_ibermat.out        # Name of the output file (using job ID)
 #SBATCH --error=%j_ibermat.err         # Name of the error file (using job ID)
-#SBATCH --cpus-per-task=8             # Number of CPUs (matches the thread settings in main.py)
-#SBATCH --mem=16G                     # Memory allocation (adjust based on your experiment needs)
-#SBATCH --partition=postiguet1        # Partition name (adjusted to match your p.slurm example)
+#SBATCH --cpus-per-task=16             # Number of CPUs (matches the thread settings in main.py)
+#SBATCH --mem=24GB                     # Memory allocation (adjust based on your experiment needs)
+#SBATCH --partition=titan        # Partition name (adjusted to match your p.slurm example)
 #SBATCH --gres=gpu:1                  # Request 1 GPU
 #SBATCH --gres=shard:10               # Added shard allocation based on your p.slurm example
 #SBATCH --time=48:00:00               # Maximum runtime of 72 hours (adjust as needed)
@@ -33,6 +33,7 @@ else
   docker build --no-cache \
     --build-arg USER_ID=$(id -u) \
     --build-arg GROUP_ID=$(id -g) \
+    --network=host \
     -t autogoal-slurm-experiment \
     -f $XAUTOLLM_DIR/dockerfiles/core/dockerfile $XAUTOLLM_DIR
 fi
@@ -43,6 +44,7 @@ docker run \
   --name autogoal_${SLURM_JOB_ID} \
   --gpus device=$SLURM_IDX \
   --rm \
+  --network=host \
   -v $XAUTOLLM_DIR:/home/coder/autogoal \
   -e PYTHONPATH=/home/coder/autogoal \
   -e EXPERIMENT_ID=alicia_${SLURM_JOB_ID} \

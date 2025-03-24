@@ -20,10 +20,9 @@ fi
 # Print environment information
 echo "===== Environment Information ====="
 echo "Running on node: $(hostname)"
-echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 echo "Current directory: $(pwd)"
 echo "=================================="
 
 # Run the main experiment script
 cd /home/coder/autogoal
-python /home/coder/autogoal/experiments/alicia/src/main.py "$@"
+python /home/coder/autogoal/experiments/alicia/src/main_traditional.py "$@"
