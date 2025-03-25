@@ -52,7 +52,7 @@ docker run \
   -e SLURM_IDX=$SLURM_IDX \
   -e SLURM_NODELIST=$SLURM_NODELIST \
   autogoal-slurm-experiment \
-  /home/coder/autogoal/experiments/alicia/run_experiment.sh
+  /home/coder/autogoal/experiments/alicia/run_experiment_traditional.sh
 
 # Clean up
 echo "Removing Docker image..."

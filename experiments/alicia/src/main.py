@@ -170,8 +170,8 @@ def execute_experiment():
     
     # Set up output paths
     output_dir = Path(OUTPUT_DIR)
-    json_log_path = output_dir / f"{EXPERIMENT_ID}.json"
-    results_path = output_dir / f"{EXPERIMENT_ID}_results.json"
+    json_log_path = output_dir / f"llms-{EXPERIMENT_ID}.json"
+    results_path = output_dir / f"llms-{EXPERIMENT_ID}_results.json"
     
     # Configure loggers
     loggers = [
