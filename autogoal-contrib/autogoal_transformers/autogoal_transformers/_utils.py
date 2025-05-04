@@ -71,6 +71,7 @@ TASK_TO_BASE_MODELS = {
         "xlm-roberta-large",
     ],
     TASK_ALIASES.TextGeneration: [
+        ## ENCODER-DECODER
         # t5
         "google-t5/t5-small",
         "google-t5/t5-base",
@@ -83,31 +84,50 @@ TASK_TO_BASE_MODELS = {
         "google/flan-t5-large",
         "google/flan-t5-xxl",
         "google/flan-t5-xl",
-        
+
+        # BART
+        "facebook/bart-base",
+        "facebook/bart-large",
+
+        ## DECODER-ONLY
         # gemma
-        # "google/gemma-7b-it",
-        # "google/gemma-2b-it",
-        # "google/gemma-7b",
-        # "google/gemma-2b",
+        "google/gemma-3-4b-it-qat-q4_0-gguf",
+        "google/gemma-3-12b-it-qat-q4_0-gguf",
+        "google/gemma-3-27b-it-qat-q4_0-gguf",
+        "google/gemma-3-4b-it",
+        "google/gemma-3-4b-pt",
+        "google/gemma-3-12b-it",
+        "google/gemma-3-12b-pt",
+        "google/gemma-3-27b-it",
+        "google/gemma-3-27b-pt",
+        "google/gemma-3-1b-it",
+        "google/gemma-3-1b-pt",
         
+        # deepseek
+        "deepseek-ai/DeepSeek-V2-Lite",
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+        "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+
         # GPT-2
         "gpt2",
         "gpt2-medium",
         "gpt2-large",
         "gpt2-xl",
         
-        # BART
-        "facebook/bart-base",
-        "facebook/bart-large",
-        
         # PHI
-        "microsoft/Phi-3-small-8k-instruct",
-        "microsoft/Phi-3-mini-4k-instruct",
+        "microsoft/Phi-3.5-mini-instruct",
+        "microsoft/Phi-4-mini-instruct",
+        "microsoft/Phi-4",
+        "microsoft/Phi-4-reasoning",
+        "microsoft/Phi-4-mini-reasoning",
         "microsoft/Phi-3-medium-4k-instruct",
-        "microsoft/phi-2",
-        "microsoft/phi-1_5",
-        
+
         # Mistral
+        "mistralai/Mistral-Nemo-Instruct-FP8-2407",
+        "mistralai/Mistral-Nemo-Instruct-2407",
+        "mistralai/Mistral-Nemo-Base-2407",
         "mistralai/Mixtral-8x7B-Instruct-v0.1",
         "mistralai/Mistral-7B-v0.1",
         "mistralai/Mistral-7B-Instruct-v0.2",
@@ -121,53 +141,12 @@ def get_base_hf_models(target_task):
     else:
         return []
     
-def get_hf_models(target_task):
-    hf_api = HfApi()
-    return hf_api.list_models(task=target_task, library="pytorch")
-
-def get_hf_models_sorted_by_likes(target_task, min_likes, min_downloads):
-    from bs4 import BeautifulSoup
-    page = 0
-    count = 0
-    
-    while True:
-        url = f"https://huggingface.co/models?pipeline_tag={target_task}&sort=likes"
-        if page > 0:
-            url += f"&p={page}"
-
-        response = requests.get(url)
-        
-        soup = BeautifulSoup(response.content.decode('utf8'))
-
-        for model in soup.find_all('article'):
-
-            parsed_text = [line.strip() for line in re.sub(' +', ' ', model.text.replace('\n', ' ').replace('\t', ' ').replace('•', '\n')).strip().split('\n')]
-            model_name_str, last_updated_str, downloaded, *likes = parsed_text
-            likes = int(likes[0]) if likes else 0
-            downloads = convert_string_to_number(downloaded.strip())
-            
-            if (downloads < min_downloads):
-                return
-            
-            if (likes < min_likes):
-                return
-
-            model_name = model.find('a').attrs['href'][1:]
-            timestamp = model.find('time').attrs['datetime']
-            yield ModelDescriptor(model_name, downloads, likes, target_task)
-
-            count += 1
-        page += 1
-
 def get_model_config(modelId):
     config = AutoConfig.from_pretrained(modelId, use_auth_token=os.getenv('HUGGINGFACE_HUB_TOKEN'), trust_remote_code=True)
     return config
 
-def get_models_info(target_task, max_amount, min_likes=None, min_downloads=None, download_mode=DOWNLOAD_MODE.HUB):
-    models = get_hf_models(target_task.value) \
-        if download_mode == DOWNLOAD_MODE.HUB \
-        else get_base_hf_models(target_task) if DOWNLOAD_MODE.BASE \
-        else get_hf_models_sorted_by_likes(target_task.value, min_likes, min_downloads)
+def get_models_info(target_task):
+    models = get_base_hf_models(target_task)
     
     # regex for detecting partially trained models
     pattern = r"train-\d+"
@@ -176,26 +155,11 @@ def get_models_info(target_task, max_amount, min_likes=None, min_downloads=None,
     model_info = []
     current = 0
     for model in tqdm(models):
-        if current >= max_amount:
-            break
-        
-        modelId = model if download_mode == DOWNLOAD_MODE.BASE else model.modelId
+        modelId = model
         if re.search(pattern, modelId) is not None:
             continue
 
         try:
-            if download_mode == DOWNLOAD_MODE.SCRAP:
-                likes, downloads = model.likes, model.downloads
-            else:
-                if download_mode == DOWNLOAD_MODE.HUB:
-                    likes, downloads = get_model_likes_downloads(model.modelId)
-            
-            if (download_mode == DOWNLOAD_MODE.SCRAP and min_likes is not None and likes < min_likes):
-                continue 
-            
-            if (download_mode == DOWNLOAD_MODE.SCRAP and min_downloads is not None and downloads < min_downloads):
-                continue 
-            
             config = get_model_config(modelId)
 
             info = {
@@ -214,10 +178,6 @@ def get_models_info(target_task, max_amount, min_likes=None, min_downloads=None,
                     "num_attention_heads": config.num_attention_heads if hasattr(config, "num_attention_heads") else None,
                 },
             }
-            
-            if download_mode == DOWNLOAD_MODE.SCRAP:
-                info["metadata"]["likes"] = likes
-                info["metadata"]["downloads"] = downloads
                 
             model_info.append(info)
             current += 1
@@ -226,34 +186,15 @@ def get_models_info(target_task, max_amount, min_likes=None, min_downloads=None,
     return model_info
 
 def download_models_info(
-    target_task, 
-    max_amount=1000, 
-    min_likes=100, 
-    min_downloads=1000,
-    download_mode=DOWNLOAD_MODE.HUB
+    target_task,
 ):
     # Get model info and dump to JSON file
-    model_info = get_models_info(target_task, max_amount, min_likes, min_downloads, download_mode=download_mode)
+    model_info = get_models_info(target_task)
     with open(f"{target_task.value}.json", "w") as f:
         json.dump(model_info, f)
         print(f"Model information has been saved to {target_task.value}.json")
 
     return model_info
-
-def get_model_likes_downloads(model_name):
-    url = f"https://huggingface.co/{model_name}"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
-    # Find the HTML element with the likes
-    likes_element = soup.find('button', {'title': 'See users who liked this repository'})
-    likes = int(likes_element.text) if likes_element else 0
-
-    # Find the HTML element with the downloads
-    downloads_element = soup.find('dt', text='Downloads last month').find_next_sibling('dd')
-    downloads = int(downloads_element.text.replace(',', '')) if downloads_element else 0
-
-    return likes, downloads
 
 def to_camel_case(name):
     # Remove numbers at the beginning, replace '/' with '_', and split on '-'
@@ -269,7 +210,6 @@ def convert_string_to_number(s):
         return float(s[:-1]) * units[s[-1]]
     else:
         return float(s)
-
 
 class SimpleTextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_length):
@@ -297,3 +237,30 @@ class SimpleTextDataset(Dataset):
             encoding['labels'] = torch.tensor(label, dtype=torch.long)
 
         return encoding
+
+class Text2TextDataset(Dataset):
+            def __init__(self, inputs, targets, tokenizer, max_length):
+                self.inputs = inputs
+                self.targets = targets
+                self.tokenizer = tokenizer
+                self.max_length = max_length
+            def __len__(self):
+                return len(self.inputs)
+            def __getitem__(self, idx):
+                input_enc = self.tokenizer(
+                    self.inputs[idx],
+                    truncation=True,
+                    padding='max_length',
+                    max_length=self.max_length,
+                    return_tensors='pt',
+                )
+                target_enc = self.tokenizer(
+                    self.targets[idx],
+                    truncation=True,
+                    padding='max_length',
+                    max_length=self.max_length,
+                    return_tensors='pt',
+                )
+                item = {key: val.squeeze() for key, val in input_enc.items()}
+                item['labels'] = target_enc['input_ids'].squeeze()
+                return item

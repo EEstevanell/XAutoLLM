@@ -909,11 +909,7 @@ def build_transformers_wrappers(
             manager = enlighten.get_manager()
 
             imports = download_models_info(
-                target_task,
-                max_amount=max_amount,
-                min_likes=min_likes,
-                min_downloads=min_downloads,
-                download_mode=download_mode,
+                target_task
             )
 
             counter = manager.counter(total=len(imports), unit="classes")

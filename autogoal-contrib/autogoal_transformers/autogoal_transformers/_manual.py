@@ -44,7 +44,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     RobertaForSequenceClassification,
 )
-from autogoal_transformers._utils import SimpleTextDataset
+from autogoal_transformers._utils import SimpleTextDataset, Text2TextDataset
 from peft import get_peft_model, LoraConfig, TaskType
 import os
 
@@ -1519,3 +1519,543 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
             class_weighted_loss,
             num_workers,
         )
+
+
+# === GENERATIVE FINETUNING ===
+@nice_repr
+class FineTunerGenBase(AlgorithmBase):
+    def __init__(
+        self,
+        inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
+        epochs: DiscreteValue(1, 10),  # type: ignore
+        warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
+        weight_decay: CategoricalValue(0, 0.001, 0.005, 0.01, 0.1),  # type: ignore
+        optimizer: CategoricalValue("adamw", "adam", "sgd", "adagrad"),  # type: ignore
+        gradient_accumulation_steps: CategoricalValue(1, 2, 4, 8, 16),  # type: ignore
+        lr_scheduler: CategoricalValue("linear", "cosine", "cosine_with_restarts", "polynomial", "constant"),  # type: ignore
+        use_mixed_precision: BooleanValue(),  # type: ignore
+        use_gradient_clipping: BooleanValue(),  # type: ignore
+        gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
+        early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
+        early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
+        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        verbose: BooleanValue() = True,  # type: ignore
+    ):
+        super().__init__()
+        self.inner_model = inner_model
+        self.batch_size = batch_size
+        self.max_length = max_length
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.warmup_steps = warmup_steps
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.lr_scheduler = lr_scheduler
+        self.use_mixed_precision = use_mixed_precision
+        self.use_gradient_clipping = use_gradient_clipping
+        self.gradient_clipping_max_norm = gradient_clipping_max_norm
+        self.early_stopping_delta = early_stopping_delta
+        self.early_stopping_patience = early_stopping_patience
+        self.num_workers = num_workers
+        self.verbose = verbose
+        self.model = None
+        self.tokenizer = None
+        self.is_encoder_decoder = None
+        self.device = torch.cuda.current_device() if torch.cuda.is_available() and is_cuda_multiprocessing_enabled() else torch.device("cpu")
+        self.device = torch.cuda._get_device(self.device)
+
+    def init_model(self):
+        # Always resolve the correct HuggingFace class based on config
+        if self.model is not None and self.tokenizer is not None:
+            return
+        self.inner_model.init_model() if hasattr(self.inner_model, "init_model") else None
+        # Try to get model/tokenizer/config from inner_model
+        self.model = getattr(self.inner_model, "model", None)
+        self.tokenizer = getattr(self.inner_model, "tokenizer", None)
+        self.is_encoder_decoder = getattr(self.inner_model, "is_encoder_decoder", None)
+        # If not available, fallback to loading from name
+        if self.model is None or self.tokenizer is None or self.is_encoder_decoder is None:
+            model_name = getattr(self.inner_model, "name", None)
+            if model_name is None:
+                raise RuntimeError("inner_model must provide .model, .tokenizer, .is_encoder_decoder, or .name")
+            config = AutoConfig.from_pretrained(model_name)
+            self.is_encoder_decoder = getattr(config, "is_encoder_decoder", False)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            if self.is_encoder_decoder:
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
+            else:
+                self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                self.tokenizer.padding_side = "left"
+        # For decoder-only models, ensure padding is set
+        if not self.is_encoder_decoder:
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.padding_side = "left"
+
+    def _create_dataset(self, X, y):
+        return Text2TextDataset(X, y, self.tokenizer, self.max_length)
+
+    def _setup_optimizer(self):
+        if self.optimizer_name == "adamw":
+            return AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "adam":
+            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "sgd":
+            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "adagrad":
+            return torch.optim.Adagrad(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        else:
+            raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
+
+    def _setup_scheduler(self, optimizer, total_steps):
+        if self.lr_scheduler == "linear":
+            return get_linear_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "cosine":
+            return get_cosine_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "cosine_with_restarts":
+            return get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "polynomial":
+            return get_polynomial_decay_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "constant":
+            return get_constant_schedule_with_warmup(optimizer, self.warmup_steps)
+        else:
+            raise ValueError(f"Unknown scheduler: {self.lr_scheduler}")
+
+    def _get_num_workers(self):
+        if self.num_workers == "default":
+            return 0
+        elif self.num_workers == "3/4":
+            return max(1, int(0.75 * os.cpu_count()))
+        elif self.num_workers == "half":
+            return max(1, int(0.5 * os.cpu_count()))
+        elif self.num_workers == "1/4":
+            return max(1, int(0.25 * os.cpu_count()))
+        else:
+            return 0
+
+    def finetune(self, X, y):
+        self.init_model()
+        dataset = self._create_dataset(X, y)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self._get_num_workers(),
+        )
+        optimizer = self._setup_optimizer()
+        total_steps = len(dataloader) * self.epochs
+        scheduler = self._setup_scheduler(optimizer, total_steps)
+        scaler = torch.cuda.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
+        previous_loss = None
+        epochs_no_improve = 0
+        for epoch in range(self.epochs):
+            self.model.train()
+            total_loss = 0
+            optimizer.zero_grad()
+            for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}", disable=not self.verbose)):
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+                if self.use_mixed_precision and scaler is not None:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(**batch)
+                        loss = outputs.loss
+                else:
+                    outputs = self.model(**batch)
+                    loss = outputs.loss
+                loss = loss / self.gradient_accumulation_steps
+                if self.use_mixed_precision and scaler is not None:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+                if (step + 1) % self.gradient_accumulation_steps == 0 or (step + 1) == len(dataloader):
+                    if self.use_gradient_clipping:
+                        if self.use_mixed_precision and scaler is not None:
+                            scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clipping_max_norm)
+                    if self.use_mixed_precision and scaler is not None:
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                total_loss += loss.item() * self.gradient_accumulation_steps
+            avg_loss = total_loss / len(dataloader)
+            if self.verbose:
+                print(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
+            # Early stopping
+            if previous_loss is not None:
+                if previous_loss - avg_loss < self.early_stopping_delta:
+                    epochs_no_improve += 1
+                    if self.verbose:
+                        print(f"No improvement in loss. ({epochs_no_improve}/{self.early_stopping_patience})")
+                    if epochs_no_improve >= self.early_stopping_patience:
+                        if self.verbose:
+                            print("Early stopping triggered.")
+                        break
+                else:
+                    epochs_no_improve = 0
+            previous_loss = avg_loss
+        return y
+
+    def predict(self, X):
+        self.init_model()
+        self.model.eval()
+        results = []
+        for i in range(0, len(X), self.batch_size):
+            batch = X[i : i + self.batch_size]
+            inputs = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
+            with torch.no_grad():
+                output_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
+                    max_length=self.max_length,
+                    num_beams=1,
+                    do_sample=False,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+            decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+            results.extend(decoded)
+        return results
+
+    def run(self, X: Seq[Prompt], y: Supervised[Seq[GeneratedText]]) -> Seq[GeneratedText]:
+        if getattr(self, "_mode", "train") == "train":
+            self.finetune(X, y)
+            return y
+        else:
+            return self.predict(X)
+
+@nice_repr
+class PartialFineTuneGenLLMTask(FineTunerGenBase):
+    def __init__(
+        self,
+        inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
+        num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
+        epochs: DiscreteValue(1, 10),  # type: ignore
+        warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
+        weight_decay: CategoricalValue(0, 0.001, 0.005, 0.01, 0.1),  # type: ignore
+        optimizer: CategoricalValue("adamw", "adam", "sgd", "adagrad"),  # type: ignore
+        gradient_accumulation_steps: CategoricalValue(1, 2, 4, 8, 16),  # type: ignore
+        lr_scheduler: CategoricalValue("linear", "cosine", "cosine_with_restarts", "polynomial", "constant"),  # type: ignore
+        use_mixed_precision: BooleanValue(),  # type: ignore
+        use_gradient_clipping: BooleanValue(),  # type: ignore
+        gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
+        early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
+        early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
+        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        verbose: BooleanValue() = True,  # type: ignore
+    ):
+        super().__init__(
+            inner_model,
+            batch_size,
+            max_length,
+            learning_rate,
+            epochs,
+            warmup_steps,
+            weight_decay,
+            optimizer,
+            gradient_accumulation_steps,
+            lr_scheduler,
+            use_mixed_precision,
+            use_gradient_clipping,
+            gradient_clipping_max_norm,
+            early_stopping_delta,
+            early_stopping_patience,
+            num_workers,
+            verbose,
+        )
+        self.num_trainable_layers = num_trainable_layers
+
+    def finetune(self, X, y):
+        self.init_model()
+        self._set_partial_trainable_layers()
+        return super().finetune(X, y)
+
+    def _set_partial_trainable_layers(self):
+        # Freeze all layers, unfreeze last N transformer blocks (encoder/decoder)
+        for param in self.model.parameters():
+            param.requires_grad = False
+        # Find transformer blocks (encoder/decoder)
+        block_names = [n for n, _ in self.model.named_parameters() if ".block." in n or ".layer." in n]
+        # Get unique block indices
+        import re
+        block_indices = sorted(set(int(m.group(1)) for n in block_names for m in [re.search(r"block\.(\d+)|layer\.(\d+)", n)] if m for m in m.groups() if m), reverse=True)
+        # Unfreeze last N blocks
+        for n, p in self.model.named_parameters():
+            for idx in block_indices[:self.num_trainable_layers]:
+                if f"block.{idx}" in n or f"layer.{idx}" in n:
+                    p.requires_grad = True
+                    
+        # Always unfreeze lm_head/final/classifier
+        for n, p in self.model.named_parameters():
+            if any(x in n for x in ["lm_head", "classifier", "final_logits_bias"]):
+                p.requires_grad = True
+
+@nice_repr
+class LoraGenLLMTask(FineTunerGenBase):
+    def __init__(
+        self,
+        inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
+        lora_r: DiscreteValue(1, 32),  # type: ignore
+        lora_alpha: CategoricalValue(8, 16, 32, 64),  # type: ignore
+        lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
+        lora_bias: CategoricalValue("none", "all", "lora_only"),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
+        epochs: DiscreteValue(1, 10),  # type: ignore
+        warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
+        weight_decay: CategoricalValue(0, 0.001, 0.005, 0.01, 0.1),  # type: ignore
+        optimizer: CategoricalValue("adamw", "adam", "sgd", "adagrad"),  # type: ignore
+        gradient_accumulation_steps: CategoricalValue(1, 2, 4, 8, 16),  # type: ignore
+        lr_scheduler: CategoricalValue("linear", "cosine", "cosine_with_restarts", "polynomial", "constant"),  # type: ignore
+        use_mixed_precision: BooleanValue(),  # type: ignore
+        use_gradient_clipping: BooleanValue(),  # type: ignore
+        gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
+        early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
+        early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
+        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        verbose: BooleanValue() = True,  # type: ignore
+    ):
+        super().__init__(
+            inner_model,
+            batch_size,
+            max_length,
+            learning_rate,
+            epochs,
+            warmup_steps,
+            weight_decay,
+            optimizer,
+            gradient_accumulation_steps,
+            lr_scheduler,
+            use_mixed_precision,
+            use_gradient_clipping,
+            gradient_clipping_max_norm,
+            early_stopping_delta,
+            early_stopping_patience,
+            num_workers,
+            verbose,
+        )
+        self.lora_r = lora_r
+        self.lora_alpha = lora_alpha
+        self.lora_dropout = lora_dropout
+        self.lora_bias = lora_bias
+
+    def init_model(self):
+        super().init_model()
+        # Apply LoRA using PEFT
+        lora_config = LoraConfig(
+            r=self.lora_r,
+            lora_alpha=self.lora_alpha,
+            lora_dropout=self.lora_dropout,
+            bias=self.lora_bias,
+            task_type=TaskType.CAUSAL_LM if not self.is_encoder_decoder else TaskType.SEQ_2_SEQ_LM,
+        )
+        self.model = get_peft_model(self.model, lora_config)
+
+@nice_repr
+class FineTuneGenLLMTask(FineTunerGenBase):
+    """
+    Modular wrapper for supervised finetuning of generative models (encoder-decoder and decoder-only)
+    for text-to-text tasks (e.g., summarization, translation, text generation).
+    """
+    def __init__(
+        self,
+        inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
+        epochs: DiscreteValue(1, 10),  # type: ignore
+        warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
+        weight_decay: CategoricalValue(0, 0.001, 0.005, 0.01, 0.1),  # type: ignore
+        optimizer: CategoricalValue("adamw", "adam", "sgd", "adagrad"),  # type: ignore
+        gradient_accumulation_steps: CategoricalValue(1, 2, 4, 8, 16),  # type: ignore
+        lr_scheduler: CategoricalValue("linear", "cosine", "cosine_with_restarts", "polynomial", "constant"),  # type: ignore
+        use_mixed_precision: BooleanValue(),  # type: ignore
+        use_gradient_clipping: BooleanValue(),  # type: ignore
+        gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
+        early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
+        early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
+        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        verbose: BooleanValue() = True,  # type: ignore
+    ):
+        super().__init__()
+        self.inner_model = inner_model
+        self.batch_size = batch_size
+        self.max_length = max_length
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.warmup_steps = warmup_steps
+        self.weight_decay = weight_decay
+        self.optimizer_name = optimizer
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.lr_scheduler = lr_scheduler
+        self.use_mixed_precision = use_mixed_precision
+        self.use_gradient_clipping = use_gradient_clipping
+        self.gradient_clipping_max_norm = gradient_clipping_max_norm
+        self.early_stopping_delta = early_stopping_delta
+        self.early_stopping_patience = early_stopping_patience
+        self.num_workers = num_workers
+        self.verbose = verbose
+        self.model = None
+        self.tokenizer = None
+        self.is_encoder_decoder = None
+        self.device = torch.cuda.current_device() if torch.cuda.is_available() and is_cuda_multiprocessing_enabled() else torch.device("cpu")
+        self.device = torch.cuda._get_device(self.device)
+
+    def init_model(self):
+        if self.model is not None and self.tokenizer is not None:
+            return
+        # The inner_model is a TextGenerationTransformer instance (from _generated.py)
+        # It should have .model and .tokenizer attributes, and .is_encoder_decoder
+        self.inner_model.init_model() if hasattr(self.inner_model, "init_model") else None
+        self.model = getattr(self.inner_model, "model", None)
+        self.tokenizer = getattr(self.inner_model, "tokenizer", None)
+        self.is_encoder_decoder = getattr(self.inner_model, "is_encoder_decoder", False)
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("inner_model must provide .model and .tokenizer after initialization.")
+        # For decoder-only models, ensure padding is set
+        if not self.is_encoder_decoder:
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.padding_side = "left"
+
+    def _create_dataset(self, X, y):
+        return Text2TextDataset(X, y, self.tokenizer, self.max_length)
+
+    def _setup_optimizer(self):
+        if self.optimizer_name == "adamw":
+            return AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "adam":
+            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "sgd":
+            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        elif self.optimizer_name == "adagrad":
+            return torch.optim.Adagrad(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        else:
+            raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
+
+    def _setup_scheduler(self, optimizer, total_steps):
+        if self.lr_scheduler == "linear":
+            return get_linear_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "cosine":
+            return get_cosine_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "cosine_with_restarts":
+            return get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "polynomial":
+            return get_polynomial_decay_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
+        elif self.lr_scheduler == "constant":
+            return get_constant_schedule_with_warmup(optimizer, self.warmup_steps)
+        else:
+            raise ValueError(f"Unknown scheduler: {self.lr_scheduler}")
+
+    def _get_num_workers(self):
+        if self.num_workers == "default":
+            return 0
+        elif self.num_workers == "3/4":
+            return max(1, int(0.75 * os.cpu_count()))
+        elif self.num_workers == "half":
+            return max(1, int(0.5 * os.cpu_count()))
+        elif self.num_workers == "1/4":
+            return max(1, int(0.25 * os.cpu_count()))
+        else:
+            return 0
+
+    def finetune(self, X, y):
+        self.init_model()
+        dataset = self._create_dataset(X, y)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self._get_num_workers(),
+        )
+        optimizer = self._setup_optimizer()
+        total_steps = len(dataloader) * self.epochs
+        scheduler = self._setup_scheduler(optimizer, total_steps)
+        scaler = torch.cuda.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
+        previous_loss = None
+        epochs_no_improve = 0
+        for epoch in range(self.epochs):
+            self.model.train()
+            total_loss = 0
+            optimizer.zero_grad()
+            for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}", disable=not self.verbose)):
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+                if self.use_mixed_precision and scaler is not None:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(**batch)
+                        loss = outputs.loss
+                else:
+                    outputs = self.model(**batch)
+                    loss = outputs.loss
+                loss = loss / self.gradient_accumulation_steps
+                if self.use_mixed_precision and scaler is not None:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+                if (step + 1) % self.gradient_accumulation_steps == 0 or (step + 1) == len(dataloader):
+                    if self.use_gradient_clipping:
+                        if self.use_mixed_precision and scaler is not None:
+                            scaler.unscale_(optimizer)
+                        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clipping_max_norm)
+                    if self.use_mixed_precision and scaler is not None:
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                total_loss += loss.item() * self.gradient_accumulation_steps
+            avg_loss = total_loss / len(dataloader)
+            if self.verbose:
+                print(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
+            # Early stopping
+            if previous_loss is not None:
+                if previous_loss - avg_loss < self.early_stopping_delta:
+                    epochs_no_improve += 1
+                    if self.verbose:
+                        print(f"No improvement in loss. ({epochs_no_improve}/{self.early_stopping_patience})")
+                    if epochs_no_improve >= self.early_stopping_patience:
+                        if self.verbose:
+                            print("Early stopping triggered.")
+                        break
+                else:
+                    epochs_no_improve = 0
+            previous_loss = avg_loss
+        return y
+
+    def predict(self, X):
+        self.init_model()
+        self.model.eval()
+        results = []
+        for i in range(0, len(X), self.batch_size):
+            batch = X[i : i + self.batch_size]
+            inputs = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
+            with torch.no_grad():
+                output_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
+                    max_length=self.max_length,
+                    num_beams=1,
+                    do_sample=False,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+            decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+            results.extend(decoded)
+        return results
+
+    def run(self, X, y):
+        if self._mode == "train":
+            self.finetune(X, y)
+            return y
+        else:
+            return self.predict(X)

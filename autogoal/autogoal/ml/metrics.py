@@ -24,7 +24,6 @@ def register_metric(func):
     METRICS.append(func)
     return func
 
-
 def find_metric(*types):
     for metric_func in METRICS:
         signature = inspect.signature(metric_func)
@@ -39,7 +38,6 @@ def find_metric(*types):
         return metric_func
 
     raise ValueError("No metric found for types: %r" % types)
-
 
 def supervised_fitness_fn_moo(objectives, target_observations=None):
     """
@@ -191,7 +189,6 @@ def supervised_fitness_fn_moo(objectives, target_observations=None):
 
     return fitness_fn
 
-
 def unsupervised_fitness_fn_moo(objectives):
     """
     Returns a fitness function for unsupervised multi-objective optimization.
@@ -242,7 +239,6 @@ def unsupervised_fitness_fn_moo(objectives):
 
     return fitness_fn
 
-
 @deprecated(
     reason="This function is deprecated, please use the supervised_fitness_fn_moo() instead."
 )
@@ -291,7 +287,6 @@ def supervised_fitness_fn(score_metric_fn):
 
     return fitness_fn
 
-
 @deprecated(
     reason="This function is deprecated, please use the unsupervised_fitness_fn_moo() instead."
 )
@@ -306,7 +301,6 @@ def unsupervised_fitness_fn(score_metric_fn):
         return score_metric_fn(X, y_pred)
 
     return fitness_fn
-
 
 def accuracy(y, predictions, *args, **kwargs) -> float:
     zipped = zip(y, predictions)

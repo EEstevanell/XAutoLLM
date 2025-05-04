@@ -154,6 +154,15 @@ class Word(Sentence):
     def _match(cls, x):
         return super()._match(x) and " " not in x
 
+# We also want to define a special type for question-answer pairs, which are basically tuples with
+# a Context and a question (both text). We can use the `ContextQuestionPair` class to represent this.
+# This is a bit of a hack, but it works for now. 
+class ContextQuestionPair(SemanticType):
+    @classmethod
+    def _match(cls, x):
+        return isinstance(x, tuple) and len(x) == 2 and all(
+            isinstance(i, Text) for i in x
+        )
 
 # We also need some basic types for generic kinds of labels, used in NLP, for example.
 # Keep in mind these do not implement `_match` as there is no sensible structural way to define them.
