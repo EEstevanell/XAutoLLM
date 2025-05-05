@@ -5,6 +5,7 @@ from typing import Dict, List
 from autogoal.kb._semantics import ContextQuestionPair, GeneratedText, Prompt
 from autogoal.search._nspge import NSPESearch
 from autogoal_transformers._manual import FineTuneGenLLMTask, PartialFineTuneGenLLMTask, LoraGenLLMTask
+from autogoal_transformers._generated import TEXT_GEN_Microsoft_Phi_4_Mini_Reasoning, TEXT_GEN_Mistralai_Mistral_Nemo_Instruct_Fp8_2407, TEXT_GEN_Deepseek_Ai_Deepseek_R1_Distill_Qwen_7B
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -13,16 +14,6 @@ import random
 from sklearn.model_selection import train_test_split
 from autogoal.utils import Gb, Min, Hour
 import autogoal.datasets.squad as squad 
-
-# Metrics
-from evaluate import load
-# Load the SQuAD metric once to potentially reuse
-try:
-    squad_metric = load("squad")
-except Exception as e:
-    print(f"Error loading SQuAD metric: {e}")
-    print("Please ensure 'evaluate' and 'sacrebleu' are installed: pip install evaluate sacrebleu")
-    squad_metric = None
 
 def _format_squad_inputs(reference_texts: List[str], prediction_texts: List[str]) -> Dict[str, List[Dict]]:
     """
@@ -78,6 +69,9 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str]) ->
     Returns:
         float: The average F1 score (0-100). Returns -1.0 if metric loading failed.
     """
+    from evaluate import load
+    squad_metric = load("squad")
+
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute F1 score.")
         return -1.0 # Indicate error
@@ -89,6 +83,8 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str]) ->
             references=formatted_data["references"]
         )
         # The metric returns scores out of 100 [2, 3]
+        print(f"F1 Score: {results['f1']}")
+        # Return the F1 score
         return results['f1']
     except ValueError as ve:
         print(f"Input Error: {ve}")
@@ -108,6 +104,9 @@ def compute_squad_exact_match(reference_texts: List[str], prediction_texts: List
     Returns:
         float: The average Exact Match score (0-100). Returns -1.0 if metric loading failed.
     """
+    from evaluate import load
+    squad_metric = load("squad")
+
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute Exact Match score.")
         return -1.0 # Indicate error
@@ -119,6 +118,8 @@ def compute_squad_exact_match(reference_texts: List[str], prediction_texts: List
             references=formatted_data["references"]
         )
         # The metric returns scores out of 100 [2, 3]
+        print(f"Exact Match Score: {results['exact_match']}")
+        # Return the Exact Match score
         return results['exact_match']
     except ValueError as ve:
         print(f"Input Error: {ve}")
@@ -126,7 +127,7 @@ def compute_squad_exact_match(reference_texts: List[str], prediction_texts: List
     except Exception as e:
         print(f"Error during Exact Match computation: {e}")
         return -1.0
-    
+
 # Import AutoGOAL components
 try:
     # Import torch first to set random seeds
@@ -207,9 +208,10 @@ def main():
         [
             # FineTuneGenLLMTask,
             PartialFineTuneGenLLMTask,
-            LoraGenLLMTask
+            LoraGenLLMTask,
+            TEXT_GEN_Microsoft_Phi_4_Mini_Reasoning
         ]
-        + find_classes(include="TEXT_GEN")
+        # + find_classes(include="TEXT_GEN")
     )
 
     output_dir = Path(OUTPUT_DIR)
@@ -261,45 +263,36 @@ def main():
         predictions = automl.predict(X_test)
         
         # Calculate metrics
-        acc = accuracy(y_test, predictions)
-        f1 = f1_score(y_test, predictions, average='macro')
-        prec = precision_score(y_test, predictions, average='macro')
-        rec = recall_score(y_test, predictions, average='macro')
+        em = compute_squad_exact_match(y_test, predictions)
+        f1 = compute_squad_f1(y_test, predictions)
         
         # Log results
         logger.info("Test set results:")
-        logger.info(f"Accuracy: {acc:.4f}")
+        logger.info(f"Exact Match: {em:.4f}")
         logger.info(f"F1 Score: {f1:.4f}")
-        logger.info(f"Precision: {prec:.4f}")
-        logger.info(f"Recall: {rec:.4f}")
-        
+
         # Save results to file
-        results = {
+        results_obj = {
             "experiment_id": EXPERIMENT_ID,
             "metrics": {
-                "accuracy": float(acc),
+                "exact_match": float(em),
                 "f1_score": float(f1),
-                "precision": float(prec),
-                "recall": float(rec)
-            },
+                },
             "runtime_seconds": time.time() - start_time,
             "parameters": {
                 "random_seed": RANDOM_SEED,
                 "time_budget": TIME_BUDGET,
                 "eval_timeout": EVAL_TIMEOUT,
                 "memory_limit": MEMORY_LIMIT,
-                "cross_validation_steps": 3
+                "cross_validation_steps": 1
             }
         }
-        
         import json
         with open(results_path, "w") as f:
-            json.dump(results, f, indent=2)
-        
+            json.dump(results_obj, f, indent=2)
         logger.info(f"Experiment completed in {time.time() - start_time:.2f} seconds")
         logger.info(f"Results saved to {results_path}")
-        
-        return results
+        return results_obj
         
     except Exception as e:
         logger.error(f"Error during experiment execution: {e}")
