@@ -118,7 +118,7 @@ class TransformersWrapper(AlgorithmBase):
                 self.__class__.download()
             try:
                 transformer_model_cls = AutoModel if transformer_model_cls == None else transformer_model_cls
-                tokenizer_cls = AutoTokenizer if transformer_model_cls == None else tokenizer_cls
+                tokenizer_cls = AutoTokenizer if transformer_model_cls == None else tokenizer_cls   
                 
                 transformer_cls_kwargs['local_files_only'] = True
                 self.model = transformer_model_cls.from_pretrained(

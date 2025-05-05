@@ -685,7 +685,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -866,7 +866,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1148,7 +1148,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1390,7 +1390,7 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1438,7 +1438,7 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1492,7 +1492,7 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1541,10 +1541,12 @@ class FineTunerGenBase(AlgorithmBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
+        # Track mode for training vs. evaluation
+        self._mode = "train"
         self.inner_model = inner_model
         self.batch_size = batch_size
         self.max_length = max_length
@@ -1569,33 +1571,50 @@ class FineTunerGenBase(AlgorithmBase):
         self.device = torch.cuda._get_device(self.device)
 
     def init_model(self):
-        # Always resolve the correct HuggingFace class based on config
-        if self.model is not None and self.tokenizer is not None:
+        """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation."""
+        # Avoid reinitialization if already initialized
+        if getattr(self, 'model', None) is not None and getattr(self, 'tokenizer', None) is not None:
             return
-        self.inner_model.init_model() if hasattr(self.inner_model, "init_model") else None
-        # Try to get model/tokenizer/config from inner_model
-        self.model = getattr(self.inner_model, "model", None)
-        self.tokenizer = getattr(self.inner_model, "tokenizer", None)
-        self.is_encoder_decoder = getattr(self.inner_model, "is_encoder_decoder", None)
-        # If not available, fallback to loading from name
-        if self.model is None or self.tokenizer is None or self.is_encoder_decoder is None:
-            model_name = getattr(self.inner_model, "name", None)
-            if model_name is None:
-                raise RuntimeError("inner_model must provide .model, .tokenizer, .is_encoder_decoder, or .name")
-            config = AutoConfig.from_pretrained(model_name)
-            self.is_encoder_decoder = getattr(config, "is_encoder_decoder", False)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        model_name = self.inner_model.name
+        print(f"Initializing generative model: {model_name}")
+        assert isinstance(model_name, str), "Model name must be a string"
+        # Load config
+        self.config = AutoConfig.from_pretrained(
+            model_name,
+            hidden_dropout_prob=(self.dropout_rate if hasattr(self, "dropout_rate") else 0),
+            attention_probs_dropout_prob=(self.dropout_rate if hasattr(self, "dropout_rate") else 0),
+            trust_remote_code=True,
+        )
+        # Load tokenizer
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+        except Exception as e:
+            print(f"Error loading tokenizer for model '{model_name}': {e}")
+            raise
+        # Determine model type: seq2seq or causal LM
+        self.is_encoder_decoder = getattr(self.config, 'is_encoder_decoder', False)
+        try:
             if self.is_encoder_decoder:
-                self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
+                from transformers import AutoModelForSeq2SeqLM
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                    model_name, config=self.config, trust_remote_code=True
+                )
             else:
-                self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
-                if self.tokenizer.pad_token is None:
-                    self.tokenizer.pad_token = self.tokenizer.eos_token
-                self.tokenizer.padding_side = "left"
-        # For decoder-only models, ensure padding is set
+                from transformers import AutoModelForCausalLM
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name, config=self.config, trust_remote_code=True
+                )
+        except Exception as e:
+            print(f"Error loading generative model for '{model_name}': {e}")
+            raise
+        # Move model to device
+        self.model.to(self.device)
+        # For decoder-only models, ensure left padding
         if not self.is_encoder_decoder:
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
             self.tokenizer.padding_side = "left"
 
     def _create_dataset(self, X, y):
@@ -1651,17 +1670,22 @@ class FineTunerGenBase(AlgorithmBase):
         optimizer = self._setup_optimizer()
         total_steps = len(dataloader) * self.epochs
         scheduler = self._setup_scheduler(optimizer, total_steps)
-        scaler = torch.cuda.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
+        scaler = torch.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
         previous_loss = None
         epochs_no_improve = 0
         for epoch in range(self.epochs):
             self.model.train()
             total_loss = 0
             optimizer.zero_grad()
+            print("Starting training...")
             for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}", disable=not self.verbose)):
+                # Remove 'labels' from batch for input, keep for target
                 batch = {k: v.to(self.device) for k, v in batch.items()}
+                # Ensure labels require grad for loss computation
+                if 'labels' in batch:
+                    batch['labels'] = batch['labels'].clone().detach().to(self.device)
                 if self.use_mixed_precision and scaler is not None:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast():
                         outputs = self.model(**batch)
                         loss = outputs.loss
                 else:
@@ -1684,7 +1708,7 @@ class FineTunerGenBase(AlgorithmBase):
                         optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
-                total_loss += loss.item() * self.gradient_accumulation_steps
+                total_loss += loss.detach().item() * self.gradient_accumulation_steps
             avg_loss = total_loss / len(dataloader)
             if self.verbose:
                 print(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
@@ -1704,31 +1728,54 @@ class FineTunerGenBase(AlgorithmBase):
         return y
 
     def predict(self, X):
-        self.init_model()
+        """Generate texts for input prompts X using the loaded generative model."""
+        # Prepare dataset and dataloader
+        # Use simple dataset for tokenizing prompts without targets
+        dataset = SimpleTextDataset(X, None, self.tokenizer, self.max_length)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self._get_num_workers(),
+        )
         self.model.eval()
         results = []
-        for i in range(0, len(X), self.batch_size):
-            batch = X[i : i + self.batch_size]
-            inputs = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
-            with torch.no_grad():
+        with torch.no_grad():
+            for batch in dataloader:
+                # Move inputs to device
+                inputs = {k: v.to(self.device) for k, v in batch.items() if k != 'labels'}
+                # Generate output ids
                 output_ids = self.model.generate(
-                    input_ids=inputs["input_ids"],
-                    attention_mask=inputs["attention_mask"],
+                    input_ids=inputs.get('input_ids'),
+                    attention_mask=inputs.get('attention_mask'),
                     max_length=self.max_length,
                     num_beams=1,
                     do_sample=False,
                     pad_token_id=self.tokenizer.pad_token_id,
                 )
-            decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-            results.extend(decoded)
+                # Decode generated tokens
+                decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+                results.extend(decoded)
         return results
 
     def run(self, X: Seq[Prompt], y: Supervised[Seq[GeneratedText]]) -> Seq[GeneratedText]:
-        if getattr(self, "_mode", "train") == "train":
-            self.finetune(X, y)
-            return y
+        if self._mode == "train":
+            # Perform finetuning
+            return self.finetune(X, y)
         else:
+            # Ensure model is initialized before prediction
+            if self.model is None or self.tokenizer is None:
+                raise ValueError("Model and tokenizer must be initialized and tuned before prediction.")
+            # Perform prediction
             return self.predict(X)
+
+    def train(self):
+        """Set mode to training for finetuning."""
+        self._mode = "train"
+
+    def eval(self):
+        """Set mode to evaluation for generation."""
+        self._mode = "eval"
 
 @nice_repr
 class PartialFineTuneGenLLMTask(FineTunerGenBase):
@@ -1750,7 +1797,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1822,7 +1869,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1851,6 +1898,32 @@ class LoraGenLLMTask(FineTunerGenBase):
 
     def init_model(self):
         super().init_model()
+        # Automatically determine target_modules for LoRA
+        import torch.nn as nn
+        import transformers
+        # Common module names for attention layers in HF models
+        candidate_keywords = [
+            "q_proj", "v_proj", "k_proj", "o_proj",  # Llama, Mistral, Falcon, etc.
+            "query", "key", "value", "dense",        # BERT, GPT2, T5, etc.
+            "attn", "proj", "fc", "mlp"
+        ]
+        # Collect all unique module names containing these keywords
+        target_modules = set()
+        for name, module in self.model.named_modules():
+            if isinstance(module, nn.Linear):
+                for kw in candidate_keywords:
+                    if kw in name:
+                        # Only add the last part of the module name (actual layer)
+                        last = name.split(".")[-1]
+                        target_modules.add(last)
+        # Fallback: if nothing found, use all Linear layers
+        if not target_modules:
+            for name, module in self.model.named_modules():
+                if isinstance(module, nn.Linear):
+                    last = name.split(".")[-1]
+                    target_modules.add(last)
+        # Convert to sorted list for reproducibility
+        target_modules = sorted(target_modules)
         # Apply LoRA using PEFT
         lora_config = LoraConfig(
             r=self.lora_r,
@@ -1858,14 +1931,17 @@ class LoraGenLLMTask(FineTunerGenBase):
             lora_dropout=self.lora_dropout,
             bias=self.lora_bias,
             task_type=TaskType.CAUSAL_LM if not self.is_encoder_decoder else TaskType.SEQ_2_SEQ_LM,
+            target_modules=target_modules,
         )
         self.model = get_peft_model(self.model, lora_config)
+        self.model.to(self.device)
 
 @nice_repr
 class FineTuneGenLLMTask(FineTunerGenBase):
     """
-    Modular wrapper for supervised finetuning of generative models (encoder-decoder and decoder-only)
-    for text-to-text tasks (e.g., summarization, translation, text generation).
+    Modular wrapper for supervised finetuning of generative models
+    (encoder-decoder and decoder-only) for text-to-text tasks
+    (e.g., summarization, translation, text generation).
     """
     def __init__(
         self,
@@ -1884,178 +1960,25 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4", "half", "1/4", "default"),  # type: ignore
+        num_workers: CategoricalValue("3/4"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
-        super().__init__()
-        self.inner_model = inner_model
-        self.batch_size = batch_size
-        self.max_length = max_length
-        self.learning_rate = learning_rate
-        self.epochs = epochs
-        self.warmup_steps = warmup_steps
-        self.weight_decay = weight_decay
-        self.optimizer_name = optimizer
-        self.gradient_accumulation_steps = gradient_accumulation_steps
-        self.lr_scheduler = lr_scheduler
-        self.use_mixed_precision = use_mixed_precision
-        self.use_gradient_clipping = use_gradient_clipping
-        self.gradient_clipping_max_norm = gradient_clipping_max_norm
-        self.early_stopping_delta = early_stopping_delta
-        self.early_stopping_patience = early_stopping_patience
-        self.num_workers = num_workers
-        self.verbose = verbose
-        self.model = None
-        self.tokenizer = None
-        self.is_encoder_decoder = None
-        self.device = torch.cuda.current_device() if torch.cuda.is_available() and is_cuda_multiprocessing_enabled() else torch.device("cpu")
-        self.device = torch.cuda._get_device(self.device)
-
-    def init_model(self):
-        if self.model is not None and self.tokenizer is not None:
-            return
-        # The inner_model is a TextGenerationTransformer instance (from _generated.py)
-        # It should have .model and .tokenizer attributes, and .is_encoder_decoder
-        self.inner_model.init_model() if hasattr(self.inner_model, "init_model") else None
-        self.model = getattr(self.inner_model, "model", None)
-        self.tokenizer = getattr(self.inner_model, "tokenizer", None)
-        self.is_encoder_decoder = getattr(self.inner_model, "is_encoder_decoder", False)
-        if self.model is None or self.tokenizer is None:
-            raise RuntimeError("inner_model must provide .model and .tokenizer after initialization.")
-        # For decoder-only models, ensure padding is set
-        if not self.is_encoder_decoder:
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            self.tokenizer.padding_side = "left"
-
-    def _create_dataset(self, X, y):
-        return Text2TextDataset(X, y, self.tokenizer, self.max_length)
-
-    def _setup_optimizer(self):
-        if self.optimizer_name == "adamw":
-            return AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_name == "adam":
-            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_name == "sgd":
-            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        elif self.optimizer_name == "adagrad":
-            return torch.optim.Adagrad(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        else:
-            raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
-
-    def _setup_scheduler(self, optimizer, total_steps):
-        if self.lr_scheduler == "linear":
-            return get_linear_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
-        elif self.lr_scheduler == "cosine":
-            return get_cosine_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
-        elif self.lr_scheduler == "cosine_with_restarts":
-            return get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
-        elif self.lr_scheduler == "polynomial":
-            return get_polynomial_decay_schedule_with_warmup(optimizer, self.warmup_steps, total_steps)
-        elif self.lr_scheduler == "constant":
-            return get_constant_schedule_with_warmup(optimizer, self.warmup_steps)
-        else:
-            raise ValueError(f"Unknown scheduler: {self.lr_scheduler}")
-
-    def _get_num_workers(self):
-        if self.num_workers == "default":
-            return 0
-        elif self.num_workers == "3/4":
-            return max(1, int(0.75 * os.cpu_count()))
-        elif self.num_workers == "half":
-            return max(1, int(0.5 * os.cpu_count()))
-        elif self.num_workers == "1/4":
-            return max(1, int(0.25 * os.cpu_count()))
-        else:
-            return 0
-
-    def finetune(self, X, y):
-        self.init_model()
-        dataset = self._create_dataset(X, y)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self._get_num_workers(),
+        super().__init__(
+            inner_model,
+            batch_size,
+            max_length,
+            learning_rate,
+            epochs,
+            warmup_steps,
+            weight_decay,
+            optimizer,
+            gradient_accumulation_steps,
+            lr_scheduler,
+            use_mixed_precision,
+            use_gradient_clipping,
+            gradient_clipping_max_norm,
+            early_stopping_delta,
+            early_stopping_patience,
+            num_workers,
+            verbose,
         )
-        optimizer = self._setup_optimizer()
-        total_steps = len(dataloader) * self.epochs
-        scheduler = self._setup_scheduler(optimizer, total_steps)
-        scaler = torch.cuda.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
-        previous_loss = None
-        epochs_no_improve = 0
-        for epoch in range(self.epochs):
-            self.model.train()
-            total_loss = 0
-            optimizer.zero_grad()
-            for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}", disable=not self.verbose)):
-                batch = {k: v.to(self.device) for k, v in batch.items()}
-                if self.use_mixed_precision and scaler is not None:
-                    with torch.cuda.amp.autocast():
-                        outputs = self.model(**batch)
-                        loss = outputs.loss
-                else:
-                    outputs = self.model(**batch)
-                    loss = outputs.loss
-                loss = loss / self.gradient_accumulation_steps
-                if self.use_mixed_precision and scaler is not None:
-                    scaler.scale(loss).backward()
-                else:
-                    loss.backward()
-                if (step + 1) % self.gradient_accumulation_steps == 0 or (step + 1) == len(dataloader):
-                    if self.use_gradient_clipping:
-                        if self.use_mixed_precision and scaler is not None:
-                            scaler.unscale_(optimizer)
-                        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clipping_max_norm)
-                    if self.use_mixed_precision and scaler is not None:
-                        scaler.step(optimizer)
-                        scaler.update()
-                    else:
-                        optimizer.step()
-                    scheduler.step()
-                    optimizer.zero_grad()
-                total_loss += loss.item() * self.gradient_accumulation_steps
-            avg_loss = total_loss / len(dataloader)
-            if self.verbose:
-                print(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
-            # Early stopping
-            if previous_loss is not None:
-                if previous_loss - avg_loss < self.early_stopping_delta:
-                    epochs_no_improve += 1
-                    if self.verbose:
-                        print(f"No improvement in loss. ({epochs_no_improve}/{self.early_stopping_patience})")
-                    if epochs_no_improve >= self.early_stopping_patience:
-                        if self.verbose:
-                            print("Early stopping triggered.")
-                        break
-                else:
-                    epochs_no_improve = 0
-            previous_loss = avg_loss
-        return y
-
-    def predict(self, X):
-        self.init_model()
-        self.model.eval()
-        results = []
-        for i in range(0, len(X), self.batch_size):
-            batch = X[i : i + self.batch_size]
-            inputs = self.tokenizer(batch, return_tensors="pt", padding=True, truncation=True, max_length=self.max_length).to(self.device)
-            with torch.no_grad():
-                output_ids = self.model.generate(
-                    input_ids=inputs["input_ids"],
-                    attention_mask=inputs["attention_mask"],
-                    max_length=self.max_length,
-                    num_beams=1,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                )
-            decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-            results.extend(decoded)
-        return results
-
-    def run(self, X, y):
-        if self._mode == "train":
-            self.finetune(X, y)
-            return y
-        else:
-            return self.predict(X)
