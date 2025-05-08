@@ -1,8 +1,0 @@
-{
-    "FineTuneGenLLMClassifier": 1.0715677645765929,
-    "LoraGenLLMClassifier": 1.1004329166635909,
-    "PartialFineTuneGenLLMClassifier": 1.0374976191758882,
-    "FineTuneLLMEmbeddingClassifier": 1.387643593564989,
-    "LoraLLMEmbeddingClassifier": 1.4959770957219085,
-    "PartialFineTuneLLMEmbeddingClassifier": 1.5349774550101651
-}
