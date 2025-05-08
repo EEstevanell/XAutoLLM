@@ -11,7 +11,6 @@ from scipy.spatial.distance import (
 )
 from abc import ABC, abstractmethod
 
-
 class DistanceMetric(ABC):
     @abstractmethod
     def compute(self, vector1: np.ndarray, vector2: np.ndarray) -> float:

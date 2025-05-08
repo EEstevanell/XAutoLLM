@@ -3,7 +3,7 @@ from typing import Tuple, List, Optional
 
 from autogoal.datasets import download, datapath
 
-def load(*args, **kwargs):
+def load(make_prompt: bool, *args, **kwargs):
     try:
         download("squad")
     except Exception as e:
@@ -40,12 +40,17 @@ def load(*args, **kwargs):
     X_train, y_train = read_csv(str(path / "train.csv"))
     X_test, y_test = read_csv(str(path / "test.csv"))
 
+    if (make_prompt):
+        # Convert to prompt format: (context, question) -> answer_text
+        X_train = [f"Context: {context}\nQuestion: {question}\nAnswer:" for context, question in X_train]
+        X_test = [f"Context: {context}\nQuestion: {question}\nAnswer:" for context, question in X_test]
+
     return X_train, y_train, X_test, y_test
 
 
 if __name__ == "__main__":
     # Example usage with ordinal encoding
-    X_train, y_train, X_test, y_test = load()
+    X_train, y_train, X_test, y_test = load(make_prompt=True)
     print("Training (context,question) len):", len(X_train))
     print("Training (context,question) 1st):", X_train[1])
     print("Training answers 1st:", y_train[:51])

@@ -1,12 +1,13 @@
+# --- Metric class for structured, future-proof metrics ---
 from math import inf
-import os
-import json
-import re
-import uuid
 from pathlib import Path
-import numpy as np
 from typing import List, Dict, Any, Optional, Union
 from datetime import date, datetime
+from autogoal.meta_learning.utils import Metric
+import numpy as np
+import json
+import uuid
+import re # Added import
 
 # Path to store experiences
 DATA_PATH = Path.home() / ".autogoal" / "experience_store"
@@ -22,9 +23,7 @@ class Experience:
         timestamp: str = None,
         alias: str = None,
         cross_val_steps: Optional[int] = None,
-        accuracy: Optional[float] = None,
-        f1: Optional[float] = None,
-        evaluation_time: Optional[float] = None,
+        metrics: Optional[list] = None, # Now a list of Metric objects
         error: Optional[str] = None,
     ):
         self.algorithms = algorithms
@@ -34,42 +33,53 @@ class Experience:
         self.system_feature_extractor_name = system_feature_extractor_name
         self.timestamp = timestamp
         self.alias = alias
-        self.accuracy = accuracy
         self.cross_val_steps = cross_val_steps
-        self.f1 = f1
-        self.evaluation_time = evaluation_time
+        # Accepts list of Metric, dict, or dicts (for backward compatibility)
+        self.metrics = []
+        if metrics is not None:
+            for m in metrics:
+                if isinstance(m, Metric):
+                    self.metrics.append(m)
+                elif isinstance(m, dict):
+                    self.metrics.append(Metric.from_dict(m))
+                else:
+                    raise ValueError(f"Invalid metric type: {type(m)}")
         self.error = error
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             'algorithms': self.algorithms,
-            'dataset_features': self.dataset_features.tolist(),
-            'system_features': self.system_features.tolist(),
+            'dataset_features': self.dataset_features if type(self.dataset_features) == list else self.dataset_features.tolist() if self.dataset_features is not None else None,
+            'system_features': self.system_features if type(self.system_features) == list else self.system_features.tolist() if self.system_features is not None else None,
             'dataset_feature_extractor_name': self.dataset_feature_extractor_name,
             'system_feature_extractor_name': self.system_feature_extractor_name,
             'timestamp': self.timestamp,
             'alias': self.alias,
-            'accuracy': self.accuracy,
             'cross_val_steps': self.cross_val_steps,
-            'f1': self.f1,
-            'evaluation_time': self.evaluation_time,
+            'metrics': [m.to_dict() for m in self.metrics],
             'error': self.error,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Experience':
+        dataset_features = np.array(data['dataset_features']) if data.get('dataset_features') is not None else None
+        system_features = np.array(data['system_features']) if data.get('system_features') is not None else None
+        metrics = data.get('metrics', [])
+        # Backward compatibility: dict -> list of Metric
+        if isinstance(metrics, dict):
+            metrics = [Metric(name=k, maximize=True, value=v) for k, v in metrics.items()]
+        elif isinstance(metrics, list):
+            metrics = [Metric.from_dict(m) if not isinstance(m, Metric) else m for m in metrics]
         return cls(
             algorithms=data['algorithms'],
-            dataset_features=np.array(data['dataset_features']),
-            system_features=np.array(data['system_features']),
+            dataset_features=dataset_features,
+            system_features=system_features,
             dataset_feature_extractor_name=data.get('dataset_feature_extractor_name', 'Unknown'),
             system_feature_extractor_name=data.get('system_feature_extractor_name', 'Unknown'),
             timestamp=data['timestamp'],
             alias=data.get('alias', 'Unknown'),
-            accuracy=data.get('accuracy'),
             cross_val_steps=data.get('cross_val_steps'),
-            f1=data.get('f1'),
-            evaluation_time=data.get('evaluation_time'),
+            metrics=metrics,
             error=data.get('error'),
         )
 
@@ -199,7 +209,11 @@ class ExperienceStore:
                                 experiences.append(experience)
                                 alias_exp_count += 1
                                 
-                                if (experience.f1 is not None and experience.f1 != -inf):
+                                # Count positive/negative by checking for at least one metric with a value
+                                if experience.metrics and any(
+                                    (m.value is not None and m.value != -inf)
+                                    for m in experience.metrics
+                                ):
                                     alias_exp_pos_count += 1
                                 else:
                                     alias_exp_neg_count += 1

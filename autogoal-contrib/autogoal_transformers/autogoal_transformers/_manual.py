@@ -771,7 +771,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
                 labels = batch["labels"].to(self.device)
 
                 if use_mixed_precision:
-                    with torch.amp.autocast("cuda"):
+                    with torch.amp.autocast(device_type=self.device.type):
                         outputs = self.model(**inputs)
                         loss = loss_fn(outputs.logits, labels)
                 else:
@@ -1048,7 +1048,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
                 labels = batch["labels"].to(self.device)
 
                 if use_mixed_precision:
-                    with torch.amp.autocast("cuda"):
+                    with torch.amp.autocast(device_type=self.device.type):
                         outputs = self.model(**inputs)
                         loss = loss_fn(outputs.logits, labels)
                 else:
@@ -1296,7 +1296,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
                 }
                 labels = batch["labels"].to(self.device)
                 if use_mixed_precision:
-                    with torch.amp.autocast("cuda"):
+                    with torch.amp.autocast(device_type=self.device.type):
                         outputs = self.model(**inputs)
                         loss = loss_fn(outputs.logits, labels)
                 else:
@@ -1524,6 +1524,11 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
 # === GENERATIVE FINETUNING ===
 @nice_repr
 class FineTunerGenBase(AlgorithmBase):
+    def print_trainable_parameters(self):
+        total_params = sum(p.numel() for p in self.model.parameters())
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+        
     def __init__(
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
@@ -1541,7 +1546,7 @@ class FineTunerGenBase(AlgorithmBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
@@ -1569,6 +1574,8 @@ class FineTunerGenBase(AlgorithmBase):
         self.is_encoder_decoder = None
         self.device = torch.cuda.current_device() if torch.cuda.is_available() and is_cuda_multiprocessing_enabled() else torch.device("cpu")
         self.device = torch.cuda._get_device(self.device)
+        # Set max_new_tokens based on model context window and max_length
+        self.max_new_tokens = None  # Will be set after model/tokenizer is loaded
 
     def init_model(self):
         """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation."""
@@ -1617,6 +1624,51 @@ class FineTunerGenBase(AlgorithmBase):
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
             self.tokenizer.padding_side = "left"
 
+        # Robustly determine the model's context window for all HuggingFace generative models
+        context_window = None
+        # Try all common config attributes
+        for attr in [
+            "n_positions",
+            "max_position_embeddings",
+            "seq_length",
+            "max_seq_len",
+            "max_sequence_length",
+            "max_position_ids",
+            "max_length",
+        ]:
+            value = getattr(self.model.config, attr, None)
+            if isinstance(value, int) and value > 0:
+                context_window = value
+                break
+
+        # Try tokenizer.model_max_length if not found
+        if context_window is None:
+            value = getattr(self.tokenizer, "model_max_length", None)
+            # Some tokenizers use 1e30 or higher as 'infinite', which is not valid
+            if isinstance(value, int) and value > 0 and value < 1e9:
+                context_window = value
+
+        # Try model.config.max_length if not found
+        if context_window is None:
+            value = getattr(self.model.config, "max_length", None)
+            if isinstance(value, int) and value > 0:
+                context_window = value
+
+        # Fallback to 1024 and warn
+        if context_window is None:
+            context_window = 1024
+            if self.verbose:
+                print("[WARN] Could not determine model context window from config or tokenizer. Using fallback value 1024.")
+
+        # Compute max_new_tokens so that input + output <= context_window
+        # If max_length is too large, ensure at least 1 token can be generated
+        if self.max_length >= context_window:
+            self.max_new_tokens = 1
+        else:
+            self.max_new_tokens = context_window - self.max_length
+        if self.verbose:
+            print(f"[INFO] Model context window: {context_window}, max_length: {self.max_length}, computed max_new_tokens: {self.max_new_tokens}")
+
     def _create_dataset(self, X, y):
         return Text2TextDataset(X, y, self.tokenizer, self.max_length)
 
@@ -1660,6 +1712,7 @@ class FineTunerGenBase(AlgorithmBase):
 
     def finetune(self, X, y):
         self.init_model()
+        self.print_trainable_parameters()
         dataset = self._create_dataset(X, y)
         dataloader = DataLoader(
             dataset,
@@ -1673,19 +1726,27 @@ class FineTunerGenBase(AlgorithmBase):
         scaler = torch.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
         previous_loss = None
         epochs_no_improve = 0
-        for epoch in range(self.epochs):
+
+        # Use tqdm for epochs and batches, with optimal settings
+        epoch_iter = range(self.epochs)
+        if self.verbose:
+            epoch_iter = tqdm(epoch_iter, desc="Epochs", unit="epoch", leave=True, disable=not self.verbose)
+
+        for epoch in epoch_iter:
             self.model.train()
             total_loss = 0
             optimizer.zero_grad()
-            print("Starting training...")
-            for step, batch in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}", disable=not self.verbose)):
-                # Remove 'labels' from batch for input, keep for target
+
+            batch_iter = enumerate(dataloader)
+            if self.verbose:
+                batch_iter = tqdm(batch_iter, total=len(dataloader), desc=f"Batches (Epoch {epoch+1})", unit="batch", leave=False, disable=not self.verbose)
+
+            for step, batch in batch_iter:
                 batch = {k: v.to(self.device) for k, v in batch.items()}
-                # Ensure labels require grad for loss computation
                 if 'labels' in batch:
                     batch['labels'] = batch['labels'].clone().detach().to(self.device)
                 if self.use_mixed_precision and scaler is not None:
-                    with torch.amp.autocast():
+                    with torch.amp.autocast(device_type=self.device.type):
                         outputs = self.model(**batch)
                         loss = outputs.loss
                 else:
@@ -1709,6 +1770,7 @@ class FineTunerGenBase(AlgorithmBase):
                     scheduler.step()
                     optimizer.zero_grad()
                 total_loss += loss.detach().item() * self.gradient_accumulation_steps
+
             avg_loss = total_loss / len(dataloader)
             if self.verbose:
                 print(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
@@ -1744,11 +1806,14 @@ class FineTunerGenBase(AlgorithmBase):
             for batch in dataloader:
                 # Move inputs to device
                 inputs = {k: v.to(self.device) for k, v in batch.items() if k != 'labels'}
+                input_ids = inputs.get('input_ids')
+                # Defensive check is no longer needed: max_new_tokens is always computed to fit the context window
+                input_length = input_ids.shape[1] if input_ids is not None else 0
                 # Generate output ids
                 output_ids = self.model.generate(
-                    input_ids=inputs.get('input_ids'),
+                    input_ids=input_ids,
                     attention_mask=inputs.get('attention_mask'),
-                    max_length=self.max_length,
+                    max_new_tokens=self.max_new_tokens,
                     num_beams=1,
                     do_sample=False,
                     pad_token_id=self.tokenizer.pad_token_id,
@@ -1797,7 +1862,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1824,27 +1889,57 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
     def finetune(self, X, y):
         self.init_model()
         self._set_partial_trainable_layers()
+        self.print_trainable_parameters()
         return super().finetune(X, y)
 
     def _set_partial_trainable_layers(self):
-        # Freeze all layers, unfreeze last N transformer blocks (encoder/decoder)
+        """
+        Freeze all layers, then unfreeze the last N transformer blocks (encoder/decoder) and always unfreeze output heads.
+        This works for both encoder-decoder and decoder-only models.
+        """
+        # Freeze all parameters
         for param in self.model.parameters():
             param.requires_grad = False
-        # Find transformer blocks (encoder/decoder)
-        block_names = [n for n, _ in self.model.named_parameters() if ".block." in n or ".layer." in n]
-        # Get unique block indices
+
+        # Comprehensive block/layer patterns for many architectures
         import re
-        block_indices = sorted(set(int(m.group(1)) for n in block_names for m in [re.search(r"block\.(\d+)|layer\.(\d+)", n)] if m for m in m.groups() if m), reverse=True)
+        block_patterns = [
+            re.compile(r"\.encoder\.block\.(\d+)\."),      # T5 encoder
+            re.compile(r"\.decoder\.block\.(\d+)\."),      # T5 decoder
+            re.compile(r"(?:^|\.)h\.(\d+)\."),             # GPT2/Llama/Mistral/Falcon (any prefix or start)
+            re.compile(r"\.layer\.(\d+)\."),               # BERT/Roberta
+            re.compile(r"\.transformer\.layers\.(\d+)\."), # Some models
+            re.compile(r"\.model\.layers\.(\d+)\."),       # Phi, DeepSeek, etc.
+            re.compile(r"\.transformer\.blocks\.(\d+)\."), # Qwen, Yi, etc.
+            re.compile(r"\.layers\.(\d+)\."),              # Some generic
+        ]
+        block_indices = set()
+        block_name_map = dict()  # idx -> list of names
+        for name, _ in self.model.named_parameters():
+            for pattern in block_patterns:
+                match = pattern.search(name)
+                if match:
+                    idx = int(match.group(1))
+                    block_indices.add(idx)
+                    block_name_map.setdefault(idx, []).append(name)
+        block_indices = sorted(block_indices, reverse=True)
+
         # Unfreeze last N blocks
-        for n, p in self.model.named_parameters():
-            for idx in block_indices[:self.num_trainable_layers]:
-                if f"block.{idx}" in n or f"layer.{idx}" in n:
-                    p.requires_grad = True
-                    
-        # Always unfreeze lm_head/final/classifier
-        for n, p in self.model.named_parameters():
-            if any(x in n for x in ["lm_head", "classifier", "final_logits_bias"]):
-                p.requires_grad = True
+        for idx in block_indices[:self.num_trainable_layers]:
+            for name in block_name_map[idx]:
+                param = dict(self.model.named_parameters())[name]
+                param.requires_grad = True
+
+        # Always unfreeze output heads (lm_head, classifier, final_logits_bias, etc.)
+        output_keywords = ["lm_head", "classifier", "final_logits_bias", "score", "output"]
+        for name, param in self.model.named_parameters():
+            if any(k in name for k in output_keywords):
+                param.requires_grad = True
+
+        # Print trainable vs total parameters for transparency
+        total_params = sum(p.numel() for p in self.model.parameters())
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(f"Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
 
 @nice_repr
 class LoraGenLLMTask(FineTunerGenBase):
@@ -1869,7 +1964,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1960,7 +2055,7 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
