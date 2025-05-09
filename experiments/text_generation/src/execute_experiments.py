@@ -94,7 +94,7 @@ if not check_huggingface_connectivity():
     sys.exit(0)
 
 
-FEATURE_CACHE_JSON_PATH = Path(__file__).resolve().parent / "cnn_dailymail.json"
+FEATURE_CACHE_JSON_PATH = "/home/coder/autogoal/experiments/text_generation/src/execute_experiments.py"
 
 def _format_squad_inputs(
     reference_texts: List[str], prediction_texts: List[str]
