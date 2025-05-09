@@ -13,8 +13,9 @@ from tqdm.auto import tqdm # For progress bars
 class GenerativeTaskFeatureExtractor(FeatureExtractor):
     NUM_REGULAR_FEATURES = 11 # Constant for the number of regular features
 
-    def __init__(self, batch_size_sbert=128): # Allow configuring batch_size
+    def __init__(self, batch_size_sbert=128, processing_chunk_size=32000): # Allow configuring batch_size and processing_chunk_size
         self.batch_size_sbert = batch_size_sbert
+        self.processing_chunk_size = processing_chunk_size # Store chunk size for embedding processing
         try:
             from nltk.corpus import stopwords
             # NLTK resource check
@@ -77,22 +78,28 @@ class GenerativeTaskFeatureExtractor(FeatureExtractor):
         avg_prompt_len_char = np.mean(prompt_lens_char)
         std_prompt_len_char = np.std(prompt_lens_char)
 
-        # 4. Prompt lexical diversity (TTR)
-        # For TTR, process tokens per document then aggregate, or concatenate then tokenize.
-        # Concatenating first is simpler as implemented.
-        all_prompts_text = ' '.join(X_train)
-        prompt_tokens_for_ttr = self._normalize_and_tokenize(all_prompts_text)
-        prompt_ttr = len(set(prompt_tokens_for_ttr)) / (len(prompt_tokens_for_ttr) + 1e-9) if prompt_tokens_for_ttr else 0.0
+        # 4. Prompt lexical diversity (TTR) - Optimized
+        prompt_ttr_scores = []
+        for text in tqdm(X_train, desc="Calculating Prompt TTR"):
+            tokens = self._normalize_and_tokenize(text)
+            if tokens:
+                ttr = len(set(tokens)) / (len(tokens) + 1e-9)
+                prompt_ttr_scores.append(ttr)
+        prompt_ttr = np.mean(prompt_ttr_scores) if prompt_ttr_scores else 0.0
 
         # 5-6. Target char length stats
         target_lens_char = np.array([len(y) for y in y_train])
         avg_target_len_char = np.mean(target_lens_char)
         std_target_len_char = np.std(target_lens_char)
 
-        # 7. Target lexical diversity (TTR)
-        all_targets_text = ' '.join(y_train)
-        target_tokens_for_ttr = self._normalize_and_tokenize(all_targets_text)
-        target_ttr = len(set(target_tokens_for_ttr)) / (len(target_tokens_for_ttr) + 1e-9) if target_tokens_for_ttr else 0.0
+        # 7. Target lexical diversity (TTR) - Optimized
+        target_ttr_scores = []
+        for text in tqdm(y_train, desc="Calculating Target TTR"):
+            tokens = self._normalize_and_tokenize(text)
+            if tokens:
+                ttr = len(set(tokens)) / (len(tokens) + 1e-9)
+                target_ttr_scores.append(ttr)
+        target_ttr = np.mean(target_ttr_scores) if target_ttr_scores else 0.0
         
         # 8. Avg char length ratio (target/prompt)
         ratios_char = [len(y) / (len(x) + 1e-9) if len(x) > 0 else 0.0 for x, y in zip(X_train, y_train)]
@@ -113,25 +120,60 @@ class GenerativeTaskFeatureExtractor(FeatureExtractor):
         avg_vocab_novelty = np.mean(vocab_novelty_scores) if vocab_novelty_scores else 0.0
 
         # 10. Avg prompt-target pairwise semantic similarity
-        # Use show_progress_bar for SentenceTransformer's encode method
-        # No need to pass device= again as model is already on the device
-        embeddings_prompt = self._model.encode(
-            X_train,
-            batch_size=self.batch_size_sbert,
-            show_progress_bar=True,
-            convert_to_numpy=True
-        )
-        embeddings_target = self._model.encode(
-            y_train,
-            batch_size=self.batch_size_sbert,
-            show_progress_bar=True,
-            convert_to_numpy=True
-        )
+        # Optimized to process in chunks for large datasets
         
-        # Reshape for cosine_similarity if it expects 2D arrays for pairwise comparison
-        # The current loop is fine as it compares one pair at a time.
-        similarities = [cosine_similarity(ep.reshape(1, -1), et.reshape(1, -1))[0,0] 
-                        for ep, et in zip(embeddings_prompt, embeddings_target)]
+        all_embeddings_prompt = []
+        num_samples_x = len(X_train)
+        # Ensure X_train is a list of strings, encode expects sentences
+        valid_X_train = [str(text) if text is not None else "" for text in X_train]
+
+        for i in tqdm(range(0, num_samples_x, self.processing_chunk_size), desc="Encoding Prompts"):
+            chunk_X = valid_X_train[i:i + self.processing_chunk_size]
+            if not chunk_X: # If the chunk is empty, skip
+                continue
+            chunk_embeddings = self._model.encode(
+                chunk_X,
+                batch_size=self.batch_size_sbert,
+                show_progress_bar=False, 
+                convert_to_numpy=True
+            )
+            all_embeddings_prompt.append(chunk_embeddings)
+        
+        if all_embeddings_prompt:
+            embeddings_prompt = np.concatenate(all_embeddings_prompt, axis=0)
+        else:
+            embeddings_prompt = np.empty((0, self.EMBEDDING_DIM), dtype=float)
+
+
+        all_embeddings_target = []
+        num_samples_y = len(y_train)
+        valid_y_train = [str(text) if text is not None else "" for text in y_train]
+
+        for i in tqdm(range(0, num_samples_y, self.processing_chunk_size), desc="Encoding Targets"):
+            chunk_y = valid_y_train[i:i + self.processing_chunk_size]
+            if not chunk_y: # If the chunk is empty, skip
+                continue
+            chunk_embeddings = self._model.encode(
+                chunk_y,
+                batch_size=self.batch_size_sbert,
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
+            all_embeddings_target.append(chunk_embeddings)
+
+        if all_embeddings_target:
+            embeddings_target = np.concatenate(all_embeddings_target, axis=0)
+        else:
+            embeddings_target = np.empty((0, self.EMBEDDING_DIM), dtype=float)
+        
+        similarities = []
+        # Check if embeddings were successfully created and have matching shapes for pairwise comparison
+        if embeddings_prompt.shape[0] > 0 and embeddings_prompt.shape[0] == embeddings_target.shape[0]:
+            for ep, et in zip(embeddings_prompt, embeddings_target):
+                 # ep and et are 1D arrays (individual embeddings)
+                 similarity_score = cosine_similarity(ep.reshape(1, -1), et.reshape(1, -1))[0,0]
+                 similarities.append(similarity_score)
+        
         avg_similarity = np.mean(similarities) if similarities else 0.0
 
         # 11. Avg ROUGE-L F1 (prompt vs target)
@@ -155,7 +197,7 @@ class GenerativeTaskFeatureExtractor(FeatureExtractor):
         ], dtype=float)
 
         # Semantic feature: mean prompt embedding
-        mean_prompt_embedding = np.mean(embeddings_prompt, axis=0) if embeddings_prompt.size > 0 else np.zeros(self.EMBEDDING_DIM)
+        mean_prompt_embedding = np.mean(embeddings_prompt, axis=0) if embeddings_prompt.size > 0 and embeddings_prompt.ndim == 2 else np.zeros(self.EMBEDDING_DIM)
 
-        return {"meta": regular_feature_vector, "semantic": mean_prompt_embedding} # Return np.ndarray directly
+        return {"meta": regular_feature_vector, "semantic": mean_prompt_embedding}
 

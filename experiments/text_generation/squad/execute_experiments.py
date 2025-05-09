@@ -309,14 +309,12 @@ TIME_BUDGET = 48 * Hour
 EVAL_TIMEOUT = 1.5 * Hour
 MEMORY_LIMIT = 8 * Gb
 
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()],
-)
+# Configure logging properly
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logger.addHandler(handler)
 
 
 def set_seeds(seed=42):
@@ -387,10 +385,17 @@ def main():
 
     # Load dataset
     X_train, y_train, X_test, y_test = cnn_dailymail.load(True)
-    X_train = X_train[:1000]  # Limit to 1000 samples for testing
-    y_train = y_train[:1000]  # Limit to 1000 samples for testing
-    X_test = X_test[:1000]  # Limit to 1000 samples for testing
-    y_test = y_test[:1000]  # Limit to 1000 samples for testing
+    X_train = X_train  # Limit to 1000 samples for testing
+    y_train = y_train  # Limit to 1000 samples for testing
+    X_test = X_test  # Limit to 1000 samples for testing
+    y_test = y_test # Limit to 1000 samples for testing
+    
+    # X_train, y_train, X_test, y_test = squad.load(True)
+    # X_train = X_train  # Limit to 1000 samples for testing
+    # y_train = y_train  # Limit to 1000 samples for testing
+    # X_test = X_test  # Limit to 1000 samples for testing
+    # y_test = y_test # Limit to 1000 samples for testing
+
 
     # Find appropriate algorithm classes for text classification
     algorithm_registry = (
@@ -475,7 +480,7 @@ def main():
     warm_start.pre_warm_up(
         X_train, y_train, current_task_features=current_task_features
     )
-
+    
     # Create or update <dataset_name>.json with the current task features (cache)
     try:  # Add try-except for writing
         with open(CNN_DAILYMAIL_JSON_PATH, "w") as f:  # Use SQUAD_JSON_PATH
@@ -484,6 +489,8 @@ def main():
         logger.info(f"Successfully cached features to {CNN_DAILYMAIL_JSON_PATH}")
     except Exception as e:
         logger.error(f"Error caching features to {CNN_DAILYMAIL_JSON_PATH}: {e}")
+
+    return
 
     objectives = [
         {

@@ -580,7 +580,6 @@ class ExperimentExecutor:
         file_logger.info(f"  Thread environment variables set to: {cpu_count} threads")
 
         from autogoal.utils._process import initialize_cuda_multiprocessing
-
         initialize_cuda_multiprocessing()
 
         try:
@@ -631,12 +630,10 @@ class ExperimentExecutor:
                 with open(feature_cache_json_path, "w") as f:
                     serialized_features = _serialize_task_features(warm_start.current_task_features) # Serialize here
                     json.dump(serialized_features, f, indent=2)
+                    logger.info("Saved features to cache: " + str(feature_cache_json_path))
                 logger.info(f"Successfully cached features to {feature_cache_json_path}")
             except Exception as e:
                 logger.error(f"Error caching features to {feature_cache_json_path}: {e}")
-
-            # initialize the WarmStart object with the current task features
-            warm_start.pre_warm_up(X_train, y_train)
 
             objectives = experiment_data["objectives"]
             if objectives is None:
