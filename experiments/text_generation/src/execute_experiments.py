@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Any
 from multiprocessing import Process, Manager, cpu_count
 from autogoal.ml.metrics import evaluation_time
 import psutil
+import numpy as np
 
 # Try importing torch for CUDA device detection
 try:
@@ -30,8 +31,39 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 # Import the configuration generator
-from text_generation.squad.execute_experiments import _deserialize_task_features, _serialize_task_features
 from text_generation.src.experiment_config_generator import ExperimentConfigGenerator
+
+
+def _serialize_task_features(task_features: Dict[str, Optional[np.ndarray]]) -> Dict[str, Optional[List[float]]]:
+    """Converts np.ndarray features in the task features dictionary to lists for JSON serialization."""
+    if task_features is None:
+        return None
+    serialized = {}
+    for key, value in task_features.items():
+        if isinstance(value, np.ndarray):
+            serialized[key] = value.tolist()
+        elif value is None:
+            serialized[key] = None
+        else:
+            # Should ideally not happen if type hints are followed, but good for robustness
+            serialized[key] = list(value) if isinstance(value, (list, tuple)) else value 
+    return serialized
+
+def _deserialize_task_features(loaded_features: Dict[str, Optional[List[float]]]) -> Dict[str, Optional[np.ndarray]]:
+    """Converts list features in a dictionary loaded from JSON back to np.ndarray."""
+    if loaded_features is None:
+        return None
+    deserialized = {}
+    for key, value in loaded_features.items():
+        if isinstance(value, list):
+            deserialized[key] = np.array(value, dtype=float) # Assuming float for features
+        elif value is None:
+            deserialized[key] = None
+        else:
+            # Should ideally not happen
+            deserialized[key] = np.array(value, dtype=float) if isinstance(value, (list, tuple)) else value
+    return deserialized
+
 
 # Configure logging properly
 logger = logging.getLogger(__name__)
@@ -756,7 +788,7 @@ def main():
     """Main entry point for the script."""
     try:
         # Initialize experiment executor
-        executor = ExperimentExecutor("multi")
+        executor = ExperimentExecutor()
 
         # Execute all experiments
         start_time = time.time()

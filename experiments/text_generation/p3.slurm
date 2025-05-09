@@ -4,13 +4,19 @@
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=16 # This will be passed to the container
 #SBATCH --mem=64G
-#SBATCH --output=/home/coder/autogoal/experiments/text_generation/logs/slurm-%j.out
-#SBATCH --error=/home/coder/autogoal/experiments/text_generation/logs/slurm-%j.err
+#SBATCH --output=%j_ibermat.out        # Name of the output file (using job ID)
+#SBATCH --error=%j_ibermat.err         # Name of the error file (using job ID)
 #SBATCH --time=48:00:00
+
+# Print job information
+echo "Iniciando trabajo en `hostname` a las `date` $SLURM_IDX"
+nvidia-smi
 
 # --- Configuration ---
 HOST_PROJECT_ROOT="/home/gplsi/estevanell/XAutoLLM" # Actual path on the Slurm node
+HOST_PROJECT_DATA_ROOT="/home/gplsi/estevanell/.autogoal" # Actual path on the Slurm node
 CONTAINER_PROJECT_ROOT="/home/coder/autogoal"   # Desired path inside the container
+CONTAINER_PROJECT_DATA_ROOT="/home/coder/.autogoal"   # Desired path inside the container
 DOCKER_IMAGE_NAME="autogoal-textgen-experiment"
 # Dockerfile path relative to the HOST_PROJECT_ROOT
 DOCKERFILE_PATH="$HOST_PROJECT_ROOT/dockerfiles/core/dockerfile"
@@ -44,17 +50,13 @@ if docker image inspect "$DOCKER_IMAGE_NAME" &> /dev/null; then
   echo "Using existing Docker image '$DOCKER_IMAGE_NAME'."
 else
   echo "Docker image '$DOCKER_IMAGE_NAME' not found. Building..."
-  if [ -f "$DOCKERFILE_PATH" ]; then
-    docker build --no-cache \
+  docker build --no-cache \
       --build-arg USER_ID=$(id -u) \
       --build-arg GROUP_ID=$(id -g) \
+      --network=host \
       -t "$DOCKER_IMAGE_NAME" \
       -f "$DOCKERFILE_PATH" "$HOST_PROJECT_ROOT" # Context is HOST_PROJECT_ROOT
     echo "Docker image '$DOCKER_IMAGE_NAME' built successfully."
-  else
-    echo "Error: Dockerfile not found at $DOCKERFILE_PATH. Cannot build image."
-    exit 1
-  fi
 fi
 
 # --- Run Experiment in Docker Container ---
@@ -65,11 +67,14 @@ docker run \
   --name "autogoal_textgen_${SLURM_JOB_ID}" \
   --gpus all \
   --rm \
+  --network=host \
   -v "$HOST_PROJECT_ROOT:$CONTAINER_PROJECT_ROOT" \
+  -v "$HOST_PROJECT_DATA_ROOT:$CONTAINER_PROJECT_DATA_ROOT" \
   -e "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES" \
   -e "SLURM_JOB_ID=$SLURM_JOB_ID" \
   -e "SLURM_NODELIST=$SLURM_NODELIST" \
   -e "CPUS_PER_TASK=$SLURM_CPUS_PER_TASK" \
+  -e SLURM_IDX=$SLURM_IDX \
   -w "$CONTAINER_PROJECT_ROOT" \
   "$DOCKER_IMAGE_NAME" \
   bash "$CONTAINER_PROJECT_ROOT/experiments/text_generation/run_experiment.sh"

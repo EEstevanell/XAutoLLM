@@ -22,6 +22,8 @@ echo "----------------------------------------------------"
 
 # Set Python Path within the container
 export PYTHONPATH="$PROJECT_ROOT_IN_CONTAINER:${PYTHONPATH}"
+export PYTHONPATH="/home/coder/autogoal/experiments:${PYTHONPATH}"
+export PYTHONPATH="/home/coder/autogoal/experiments/text_classification:${PYTHONPATH}"
 echo "PYTHONPATH (updated): $PYTHONPATH"
 
 # Set threading environment variables based on CPUS_PER_TASK from Slurm
