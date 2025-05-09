@@ -709,7 +709,7 @@ class ExperimentExecutor:
             List of experiment results
         """
         import nltk
-        nltk.download("all")
+        nltk.data.path.append("/home/coder/.autogoal/data/nltk_data")
     
         # Load configurations based on experiment type
         self.experiments = self.load_multi_objective_configs()
