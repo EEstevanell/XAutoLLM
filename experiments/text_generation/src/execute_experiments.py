@@ -585,6 +585,7 @@ class ExperimentExecutor:
             )
 
             feature_cache_json_path = FEATURE_CACHE_JSON_PATH / f"{dataset_name}.json"
+            current_task_features = None  # Ensure variable is always defined
             try:
                 with open(feature_cache_json_path, "r") as f:  # Use CNN_DAILYMAIL_JSON_PATH
                     loaded_f = json.load(f)
@@ -596,7 +597,7 @@ class ExperimentExecutor:
                     f"Error loading cache file {feature_cache_json_path}: {e}. Will recompute features."
                 )
 
-            # initialize the WarmStart object with the current task features
+            # initialize the WarmStart object with the current task features (may be None)
             warm_start.pre_warm_up(
                 X_train, y_train, current_task_features=current_task_features
             )
@@ -661,6 +662,7 @@ class ExperimentExecutor:
             ]
         except Exception as e:
             file_logger.error(f"Failed to initialize framework: {e}")
+            return  # Exit early if initialization fails
 
         try:
             # Fit the model and evaluate

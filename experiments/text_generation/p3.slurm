@@ -67,7 +67,7 @@ docker run \
   --name "autogoal_textgen_${SLURM_JOB_ID}" \
   --gpus all \
   --rm \
-  --network=host \
+  --network host \
   -v "$HOST_PROJECT_ROOT:$CONTAINER_PROJECT_ROOT" \
   -v "$HOST_PROJECT_DATA_ROOT:$CONTAINER_PROJECT_DATA_ROOT" \
   -e "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES" \
