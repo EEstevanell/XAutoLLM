@@ -21,28 +21,11 @@ from multiprocessing import Process, Manager, cpu_count
 from autogoal.ml.metrics import evaluation_time
 import psutil
 import numpy as np
-import socket
-
-def has_internet(host="8.8.8.8", port=53, timeout=3):
-    """
-    Checks for internet connectivity by making an HTTP request to a known URL.
-    Returns True if successful, False otherwise.
-    """
-    import urllib.request
-    try:
-        urllib.request.urlopen("http://www.google.com", timeout=timeout)
-        return True
-    except Exception:
-        return False
-
+import requests
 
 # Set PYTHONPATH for subprocesses (so child processes inherit it)
 import os
 os.environ["PYTHONPATH"] = f"/home/coder/autogoal/experiments:/home/coder/autogoal/experiments/text_classification:" + os.environ.get("PYTHONPATH", "")
-
-if not has_internet():
-    print("No network – skipping downloads or exiting")
-    sys.exit(0)
 
 # Try importing torch for CUDA device detection
 try:
@@ -91,6 +74,25 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(handler)
+
+def check_huggingface_connectivity():
+    try:
+        # This endpoint is stable and requires no authentication for a HEAD request
+        response = requests.head("https://huggingface.co/api/models")
+        if response.status_code == 200:
+            logger.info("Hugging Face Model Hub is reachable.")
+            return True
+        else:
+            logger.warning(f"Hugging Face Hub responded with status: {response.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"Could not reach Hugging Face Model Hub: {e}")
+        return False
+
+if not check_huggingface_connectivity():
+    logger.error("No connection to Hugging Face – skipping downloads or exiting")
+    sys.exit(0)
+
 
 FEATURE_CACHE_JSON_PATH = Path(__file__).resolve().parent / "cnn_dailymail.json"
 
