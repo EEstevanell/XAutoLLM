@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from multiprocessing import Process, Manager, cpu_count
+from autogoal.ml.metrics import evaluation_time
 import psutil
 
 # Try importing torch for CUDA device detection
@@ -29,6 +30,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 # Import the configuration generator
+from text_generation.squad.execute_experiments import _deserialize_task_features, _serialize_task_features
 from text_generation.src.experiment_config_generator import ExperimentConfigGenerator
 
 # Configure logging properly
@@ -38,8 +40,11 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(handler)
 
+FEATURE_CACHE_JSON_PATH = Path(__file__).resolve().parent / "cnn_dailymail.json"
 
-def _format_squad_inputs(reference_texts: List[str], prediction_texts: List[str]) -> Dict[str, List[Dict]]:
+def _format_squad_inputs(
+    reference_texts: List[str], prediction_texts: List[str]
+) -> Dict[str, List[Dict]]:
     """
     Formats lists of prediction and reference texts into the dictionary
     structure required by the Hugging Face SQuAD evaluate metric.
@@ -65,24 +70,28 @@ def _format_squad_inputs(reference_texts: List[str], prediction_texts: List[str]
         q_id = str(i)
 
         # Format prediction
-        formatted_predictions.append({
-            'prediction_text': str(pred_text), # Ensure it's a string
-            'id': q_id
-        })
+        formatted_predictions.append(
+            {"prediction_text": str(pred_text), "id": q_id}  # Ensure it's a string
+        )
 
         # Format reference
         # The 'text' field must be a list of strings, even if there's only one answer [2, 3].
-        formatted_references.append({
-            'answers': {
-                'text': [str(ref_text)], # Ensure it's a string and wrap in a list
-                'answer_start': [] # answer_start is often required but can be empty if only text is used
+        formatted_references.append(
+            {
+                "answers": {
+                    "text": [str(ref_text)],  # Ensure it's a string and wrap in a list
+                    "answer_start": [],  # answer_start is often required but can be empty if only text is used
                 },
-            'id': q_id
-        })
+                "id": q_id,
+            }
+        )
 
     return {"predictions": formatted_predictions, "references": formatted_references}
 
-def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str]) -> float:
+
+def compute_squad_f1(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
     """
     Computes the official SQuAD F1 score given lists of prediction and reference texts.
 
@@ -94,22 +103,23 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str]) ->
         float: The average F1 score (0-100). Returns -1.0 if metric loading failed.
     """
     from evaluate import load
+
     squad_metric = load("squad")
 
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute F1 score.")
-        return -1.0 # Indicate error
+        return -1.0  # Indicate error
 
     try:
         formatted_data = _format_squad_inputs(prediction_texts, reference_texts)
         results = squad_metric.compute(
             predictions=formatted_data["predictions"],
-            references=formatted_data["references"]
+            references=formatted_data["references"],
         )
         # The metric returns scores out of 100 [2, 3]
         print(f"F1 Score: {results['f1']}")
         # Return the F1 score
-        return results['f1']
+        return results["f1"]
     except ValueError as ve:
         print(f"Input Error: {ve}")
         return -1.0
@@ -117,7 +127,10 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str]) ->
         print(f"Error during F1 computation: {e}")
         return -1.0
 
-def compute_squad_exact_match(reference_texts: List[str], prediction_texts: List[str]) -> float:
+
+def compute_squad_exact_match(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
     """
     Computes the official SQuAD Exact Match (EM) score given lists of prediction and reference texts.
 
@@ -129,28 +142,165 @@ def compute_squad_exact_match(reference_texts: List[str], prediction_texts: List
         float: The average Exact Match score (0-100). Returns -1.0 if metric loading failed.
     """
     from evaluate import load
+
     squad_metric = load("squad")
 
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute Exact Match score.")
-        return -1.0 # Indicate error
+        return -1.0  # Indicate error
 
     try:
         formatted_data = _format_squad_inputs(prediction_texts, reference_texts)
         results = squad_metric.compute(
             predictions=formatted_data["predictions"],
-            references=formatted_data["references"]
+            references=formatted_data["references"],
         )
         # The metric returns scores out of 100 [2, 3]
         print(f"Exact Match Score: {results['exact_match']}")
         # Return the Exact Match score
-        return results['exact_match']
+        return results["exact_match"]
     except ValueError as ve:
         print(f"Input Error: {ve}")
         return -1.0
     except Exception as e:
         print(f"Error during Exact Match computation: {e}")
         return -1.0
+
+
+def _compute_rouge_scores(
+    reference_texts: List[str], prediction_texts: List[str]
+) -> Dict[str, float]:
+    """
+    Helper function to compute all ROUGE scores using the Hugging Face evaluate library.
+
+    Args:
+        reference_texts: A list of reference summary strings.
+        prediction_texts: A list of corresponding predicted summary strings.
+
+    Returns:
+        A dictionary containing ROUGE scores (e.g., rouge1, rouge2, rougeL, rougeLsum).
+        Returns an empty dictionary if metric loading or computation fails.
+    """
+    if len(prediction_texts) != len(reference_texts):
+        logger.error("Prediction and reference lists must have the same length.")
+        raise ValueError("Prediction and reference lists must have the same length.")
+
+    # Handle empty lists: ROUGE scores are not well-defined or are zero.
+    if len(prediction_texts) == 0 or len(reference_texts) == 0:
+        logger.error(
+            "ROUGE computation: One or both input lists (predictions, references) are empty. Returning empty scores."
+        )
+        return {}
+
+    try:
+        from evaluate import load
+
+        rouge_metric = load("rouge")
+    except Exception as e:
+        logger.error(f"Failed to load ROUGE metric from Hugging Face evaluate: {e}")
+        return {}
+
+    if rouge_metric is None:
+        logger.error("ROUGE metric not loaded successfully.")
+        return {}
+
+    try:
+        results = rouge_metric.compute(
+            predictions=prediction_texts,
+            references=reference_texts,
+            # Optional: use_stemmer=True can be added for Porter stemmer application
+        )
+        # The results are typically like:
+        # {'rouge1': 0.45, 'rouge2': 0.25, 'rougeL': 0.40, 'rougeLsum': 0.42}
+        # These are F-measure scores by default for rouge1, rouge2, rougeL.
+        # For rougeLsum, it's also an F-measure.
+        return results
+    except ValueError as ve:
+        logger.error(f"Input error during ROUGE computation: {ve}")
+        return {}
+    except Exception as e:
+        logger.error(f"Error during ROUGE computation: {e}")
+        return {}
+
+
+def compute_rouge1(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
+    """
+    Computes the ROUGE-1 score.
+
+    Args:
+        reference_texts: A list of reference summary strings.
+        prediction_texts: A list of corresponding predicted summary strings.
+
+    Returns:
+        float: The ROUGE-1 score (0-1). Returns -1.0 on error.
+    """
+    results = _compute_rouge_scores(reference_texts, prediction_texts)
+    if results and "rouge1" in results:
+        logger.info(f"ROUGE-1 Score: {results['rouge1']}")
+        return results["rouge1"]
+    return -1.0
+
+
+def compute_rouge2(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
+    """
+    Computes the ROUGE-2 score.
+
+    Args:
+        reference_texts: A list of reference summary strings.
+        prediction_texts: A list of corresponding predicted summary strings.
+
+    Returns:
+        float: The ROUGE-2 score (0-1). Returns -1.0 on error.
+    """
+    results = _compute_rouge_scores(reference_texts, prediction_texts)
+    if results and "rouge2" in results:
+        logger.info(f"ROUGE-2 Score: {results['rouge2']}")
+        return results["rouge2"]
+    return -1.0
+
+
+def compute_rougeL(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
+    """
+    Computes the ROUGE-L score (Longest Common Subsequence at sentence level).
+
+    Args:
+        reference_texts: A list of reference summary strings.
+        prediction_texts: A list of corresponding predicted summary strings.
+
+    Returns:
+        float: The ROUGE-L score (0-1). Returns -1.0 on error.
+    """
+    results = _compute_rouge_scores(reference_texts, prediction_texts)
+    if results and "rougeL" in results:
+        logger.info(f"ROUGE-L Score: {results['rougeL']}")
+        return results["rougeL"]
+    return -1.0
+
+
+def compute_rougeLsum(
+    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
+) -> float:
+    """
+    Computes the ROUGE-Lsum score (Longest Common Subsequence at summary level).
+
+    Args:
+        reference_texts: A list of reference summary strings.
+        prediction_texts: A list of corresponding predicted summary strings.
+
+    Returns:
+        float: The ROUGE-Lsum score (0-1). Returns -1.0 on error.
+    """
+    results = _compute_rouge_scores(reference_texts, prediction_texts)
+    if results and "rougeLsum" in results:
+        logger.info(f"ROUGE-Lsum Score: {results['rougeLsum']}")
+        return results["rougeLsum"]
+    return -1.0
 
 
 class CudaNotFoundError(Exception):
@@ -177,7 +327,9 @@ class ExperimentExecutor:
         self.experiments = []
         self.cuda_device_count = self._detect_cuda_devices()
         self.cpu_count = cpu_count()
-        self.output_dir = Path("/home/coder/autogoal/experiments/text_generation/output/logs")
+        self.output_dir = Path(
+            "/home/coder/autogoal/experiments/text_generation/output/logs"
+        )
         self.output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Available CPU cores: {self.cpu_count}")
         logger.info(f"Experiment logs will be stored in: {self.output_dir}")
@@ -217,7 +369,52 @@ class ExperimentExecutor:
             List of experiment configurations
         """
         logger.info("Loading multi-objective experiment configurations")
-        return self.config_generator.generate_all_experiment_configs()
+        return [
+            {
+                "dataset": "cnn_dailymail",
+                "experiment_id": "cnn_dailymail",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "rouge-L",
+                        "metric": compute_rougeL,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("rouge-L", compute_rougeL)],
+                "config": {
+                    "k_pos": 0,
+                    "k_neg": 0,
+                },
+            },
+            {
+                "dataset": "squad",
+                "experiment_id": "squad",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": compute_squad_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("rouge-L", compute_rougeL)],
+                "config": {
+                    "k_pos": 0,
+                    "k_neg": 0,
+                },
+            },
+        ]
 
     @staticmethod
     def execute_experiment(
@@ -241,26 +438,38 @@ class ExperimentExecutor:
         # Import necessary modules inside process
         import os
         import sys
-        from autogoal.meta_learning.distance import  HybridCosineDistance, HybridEuclideanCosineDistance
-        from autogoal.meta_learning.feature_extraction.generative_task import GenerativeTaskFeatureExtractor
+        from autogoal.meta_learning.distance import (
+            CosineDistance,
+            EuclideanDistance,
+        )
+        from autogoal.meta_learning.feature_extraction.generative_task import (
+            GenerativeTaskFeatureExtractor,
+        )
         from autogoal.datasets import squad, cnn_dailymail
         from autogoal.meta_learning.warm_start import WarmStart
         from autogoal.meta_learning.normalization import LogNormalizer, MinMaxNormalizer
-        from autogoal.ml import AutoML, evaluation_time, accuracy
-        from autogoal.datasets.semeval_2023_task_8_1 import macro_f1_plain
-        from autogoal.kb import Seq, Supervised, VectorDiscrete, Sentence, Prompt, GeneratedText
+        from autogoal.ml import AutoML, evaluation_time
+        from autogoal.kb import (
+            Seq,
+            Supervised,
+            VectorDiscrete,
+            Sentence,
+            Prompt,
+            GeneratedText,
+        )
         from autogoal_contrib import find_classes
         from autogoal.search import JsonLogger, ConsoleLogger
         from autogoal.search import NSPESearch
         from autogoal_transformers._manual import (
             FineTuneGenLLMTask,
             LoraGenLLMTask,
-            PartialFineTuneGenLLMTask
+            PartialFineTuneGenLLMTask,
         )
         from autogoal.utils import Hour, Gb
         from autogoal.search._warm_start_pge import NSPEWarmStartSearch, NSPESearch
         from autogoal.meta_learning._logging import ExperienceLogger
-
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        
         dataset_dict = {
             "cnn_dailymail": cnn_dailymail,
             "squad": squad,
@@ -333,11 +542,11 @@ class ExperimentExecutor:
                 ),
                 k_pos=config.get("k_pos", 10),  # Number of experiences to consider
                 k_neg=config.get("k_neg", 10),  # Number of experiences to consider
-                distance=config.get("distance", HybridEuclideanCosineDistance),
+                distance=config.get("distance", CosineDistance),
                 normalizers=config.get(
                     "normalizers", [LogNormalizer(), MinMaxNormalizer()]
                 ),
-                exclude=f"{config.get('exclude', '')}|_warmstart|seed", # Exclude all experience with warmstart or seed in its name
+                exclude=f"{config.get('exclude', '')}|_warmstart|seed",  # Exclude all experience with warmstart or seed in its name
                 include=config.get("include", None),
                 beta_scale=config.get("beta_scale", 1.0),
                 beta=config.get("beta", None),
@@ -346,41 +555,63 @@ class ExperimentExecutor:
                 utility_function=config.get("utility_function", "linear_front"),
             )
 
+            feature_cache_json_path = FEATURE_CACHE_JSON_PATH / f"{dataset_name}.json"
+            try:
+                with open(feature_cache_json_path, "r") as f:  # Use CNN_DAILYMAIL_JSON_PATH
+                    loaded_f = json.load(f)
+                    current_task_features = _deserialize_task_features(loaded_f) # Deserialize here
+            except FileNotFoundError:  # Be more specific with the exception
+                logger.info(f"Cache file {feature_cache_json_path} not found. Will compute features.")
+            except Exception as e:  # Catch other potential errors
+                logger.warning(
+                    f"Error loading cache file {feature_cache_json_path}: {e}. Will recompute features."
+                )
+
+            # initialize the WarmStart object with the current task features
+            warm_start.pre_warm_up(
+                X_train, y_train, current_task_features=current_task_features
+            )
+
+            # Create or update <dataset_name>.json with the current task features (cache)
+            try:  # Add try-except for writing
+                with open(feature_cache_json_path, "w") as f:
+                    serialized_features = _serialize_task_features(warm_start.current_task_features) # Serialize here
+                    json.dump(serialized_features, f, indent=2)
+                logger.info(f"Successfully cached features to {feature_cache_json_path}")
+            except Exception as e:
+                logger.error(f"Error caching features to {feature_cache_json_path}: {e}")
+
             # initialize the WarmStart object with the current task features
             warm_start.pre_warm_up(X_train, y_train)
 
-            objectives = (compute_squad_exact_match, compute_squad_f1)
-            maximize = (True, True)
+            objectives = experiment_data["objectives"]
+            if objectives is None:
+                raise ValueError("Objectives cannot be None")
+            
             optimizer = NSPESearch if is_baseline else NSPEWarmStartSearch
             seed = config.get("seed", 42)
 
-            algorithm_registry = (
-                [
-                    FineTuneGenLLMTask,
-                    LoraGenLLMTask,
-                    PartialFineTuneGenLLMTask
-                ]
-                + find_classes(include="TEXT_GEN")
-            )
+            algorithm_registry = [
+                FineTuneGenLLMTask,
+                LoraGenLLMTask,
+                PartialFineTuneGenLLMTask,
+            ] + find_classes(include="TEXT_GEN")
 
             model = AutoML(
                 input=(Seq[Prompt], Supervised[Seq[GeneratedText]]),
-                output=VectorDiscrete,
+                output=Seq[GeneratedText],
                 random_state=seed,
                 registry=algorithm_registry,
                 evaluation_timeout=1.5 * Hour,
                 memory_limit=35 * Gb,
                 # multi-objective baseline uses 48 hours for search timeout
                 search_timeout=48 * Hour if is_baseline else 24 * Hour,
-                cross_validation_steps=2,
-                stratified_cross_validation=True,
+                cross_validation_steps=1,
+                stratified_cross_validation=False,
                 # Objective functions. Multi-objective experiments use macro_f1_plain and evaluation_time
                 objectives=objectives,
                 # Additional observations for logging
-                observations=[
-                    ("Evaluation Time", evaluation_time)
-                ],
-                maximize=maximize,
+                observations=experiment_data.get("observations", []),
                 # baseline uses original search algorithm
                 search_algorithm=optimizer,
                 # warm_start is None if baseline, otherwise it is the prepared WarmStart object
@@ -392,7 +623,7 @@ class ExperimentExecutor:
                 ConsoleLogger(),
                 JsonLogger(f"titan-{dataset_name}-warm-start-id:{id}.json"),
                 ExperienceLogger(
-                    dataset_features=warm_start.current_dataset_features,
+                    dataset_features=warm_start.current_task_features,
                     system_features=warm_start.current_system_features,
                     dataset_feature_extractor_name="GenerativeTaskFeatureExtractor",
                     system_feature_extractor_name="SystemFeatureExtractor",
@@ -422,6 +653,9 @@ class ExperimentExecutor:
         Returns:
             List of experiment results
         """
+        import nltk
+        nltk.download("all")
+    
         # Load configurations based on experiment type
         self.experiments = self.load_multi_objective_configs()
 
@@ -474,7 +708,13 @@ class ExperimentExecutor:
                 # Create and start the process
                 p = Process(
                     target=self.execute_experiment,
-                    args=(experiment, self.experiment_type, device_id, cpu_cores, str(log_file_path)),
+                    args=(
+                        experiment,
+                        self.experiment_type,
+                        device_id,
+                        cpu_cores,
+                        str(log_file_path),
+                    ),
                 )
                 processes.append(p)
                 p.start()
@@ -512,30 +752,11 @@ class ExperimentExecutor:
         return all_results
 
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Execute AutoGOAL experiments with specified configurations"
-    )
-
-    parser.add_argument(
-        "--experiment_type",
-        type=str,
-        choices=["single", "multi"],
-        default="single",  # Set single-objective as default
-        help="Type of experiment (single-objective or multi-objective, defaults to single)",
-    )
-
-    return parser.parse_args()
-
-
 def main():
     """Main entry point for the script."""
-    args = parse_arguments()
-
     try:
         # Initialize experiment executor
-        executor = ExperimentExecutor(args.experiment_type)
+        executor = ExperimentExecutor("multi")
 
         # Execute all experiments
         start_time = time.time()
@@ -557,7 +778,7 @@ def main():
 
         # Save summary of results
         summary_path = Path(
-            "/home/coder/autogoal/experiments/output/experiment_summary.json"
+            "/home/coder/autogoal/experiments/text-generation/output/experiment_summary.json"
         )
         with open(summary_path, "w") as f:
             json.dump(

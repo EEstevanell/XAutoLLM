@@ -1,6 +1,8 @@
 from datetime import date
 import math
 from typing import Callable, Dict, List, Optional, Union
+import logging # Add logging import
+
 from autogoal.meta_learning._experience import Experience, ExperienceStore, Metric
 
 # --- MetricSpec class for user input of metric configuration ---
@@ -12,20 +14,20 @@ from autogoal.meta_learning.distance import (
     DistanceMetric,
     EuclideanDistance,
     MahalanobisDistance,
+    CosineDistance, # Added
 )
 from autogoal.meta_learning.feature_extraction.system_feature_extractor import (
     SystemFeatureExtractor,
 )
 from autogoal.meta_learning.sampling import ExperienceReplayModelSampler
 from autogoal.meta_learning import FeatureExtractor
-from autogoal.meta_learning.utils import MetricSpec
-from autogoal.sampling import (
-    UnormalizedWeightParam,
-    update_model,
-)
+from autogoal.meta_learning.utils import MetricSpec, Metric # Ensure Metric is imported if not already
+from autogoal.sampling import UnormalizedWeightParam, update_model
 import numpy as np
 from autogoal.search.utils import non_dominated_sort, crowding_distance_with_maximize
 
+
+logger = logging.getLogger(__name__) # Initialize logger for the module
 
 class WarmStart:
     """
@@ -55,8 +57,9 @@ class WarmStart:
         metrics (various): Metrics to use for utility computation. Accepts None, str, list[str], dict, list[dict], or list[MetricSpec].
         utility_function (str): Utility function for positive experience weighting. Options: 'weighted_sum', 'linear_front', 'logarithmic_front'.
         normalizers (list[Normalizer]): List of normalizers to apply to features before distance computation.
-        distance (DistanceMetric): Distance metric instance for comparing feature vectors.
-        dataset_feature_extractor (FeatureExtractor): Class for extracting dataset meta-features.
+        distance (DistanceMetric): Distance metric instance for comparing task_meta and system feature vectors.
+        semantic_distance (DistanceMetric): Distance metric instance for comparing semantic feature vectors.
+        dataset_feature_extractor (FeatureExtractor): Class for extracting dataset task features (must return a dict e.g. {"meta":..., "semantic":...}).
         system_feature_extractor (FeatureExtractor): Class for extracting system meta-features.
         from_date, to_date, include, exclude: Experience filtering options by date or alias.
         exit_after_warmup (bool): If True, exits after warm-up and optionally calls a callback.
@@ -68,7 +71,8 @@ class WarmStart:
         _experiences (list[Experience]): Filtered list of relevant past experiences.
         generator_fn (callable): Function to generate configurations for the model.
         X_train, y_train: Training data for the current dataset.
-        current_dataset_features, current_system_features: Extracted meta-features for the current run.
+        current_task_features (dict): Extracted task meta-features for the current run (e.g. {"meta":..., "semantic":...}).
+        current_system_features: Extracted system features for the current run.
     """
 
     def __init__(
@@ -80,18 +84,23 @@ class WarmStart:
         # Optimization Parameters
         max_alpha=0.05,
         min_alpha=-0.02,
-        adaptative_positive_alpha_limit=None,  # If some, max_alpha will be computed dynamically based on the amount of positive experiences and this value
-        adaptative_negative_alpha_limit=None,  # If some, min_alpha will be computed dynamically based on the amount of negative experiences and this value
-        beta_scale=1.0,  # Defines how much the beta is scaled based on the distances
-        beta=None,  # If None, it will be computed dynamically based on the distances by beta_scale
+        adaptative_positive_alpha_limit=None,
+        adaptative_negative_alpha_limit=None,
+        beta_scale=1.0,
+        beta=None,
         # Utility Function Parameters
-        metrics=None,  # Accepts None, str, list[str], dict, list[dict], or list[MetricSpec]
+        metrics=None,
         utility_function="weighted_sum",
+        # New Feature Weights
+        task_meta_weight=0.4,
+        semantic_weight=0.3,
+        system_weight=0.3,
         # Normalization and Distance Parameters
         normalizers: Optional[List[Normalizer]] = None,
-        distance: DistanceMetric = EuclideanDistance,
+        distance: Optional[DistanceMetric] = None, # Default to EuclideanDistance if None
+        semantic_distance: Optional[DistanceMetric] = None, # Default to CosineDistance if None
         # Experience Matching and Filtering Parameters
-        dataset_feature_extractor: Optional[FeatureExtractor] = TextClassificationFeatureExtractor,
+        dataset_feature_extractor: Optional[FeatureExtractor] = TextClassificationFeatureExtractor, # Must return a dict
         system_feature_extractor: Optional[FeatureExtractor] = SystemFeatureExtractor,
         from_date: Optional[Union[str, date]] = None,
         to_date: Optional[Union[str, date]] = None,
@@ -125,17 +134,25 @@ class WarmStart:
             and self.adaptative_positive_alpha_limit < 0
         ):
             raise ValueError(
-                "adaptative_negative_alpha_limit must be a non-negative value."
+                "adaptative_positive_alpha_limit must be a non-negative value." # Corrected from adaptative_negative_alpha_limit
             )
 
         self.beta = beta
         self.beta_scale = beta_scale
         self.utility_function = utility_function
-        # Process metrics (names/weights only)
         self.metrics = self._process_metrics(metrics)
 
+        # Store feature weights
+        self.task_meta_weight = task_meta_weight
+        self.semantic_weight = semantic_weight
+        self.system_weight = system_weight
+
         self.normalizers = normalizers or []
-        self.distance = distance() if distance else EuclideanDistance()
+        # Use provided distance or default to EuclideanDistance for meta/system
+        self.distance_metric = distance() if distance else EuclideanDistance()
+        # Use provided semantic_distance or default to CosineDistance for semantic features
+        self.semantic_distance_metric = semantic_distance() if semantic_distance else CosineDistance()
+
         self.dataset_feature_extractor_class = dataset_feature_extractor
         self.system_feature_extractor_class = system_feature_extractor
         self.from_date = from_date
@@ -145,16 +162,18 @@ class WarmStart:
         self.exit_after_warmup = exit_after_warmup
         self.on_warmup_exit = on_warmup_exit
 
-        # Load and filter experiences to infer maximize flags
         all_experiences = ExperienceStore.load_all_experiences(
             self.from_date, self.to_date, include=self.include, exclude=self.exclude
         )
-        filtered_experiences = self.filter_experiences_by_feature_extractors(all_experiences)
+        filtered_experiences = self.filter_experiences(all_experiences)
         self._experiences = filtered_experiences
         self._infer_metric_maximize_flags()
 
         print(f"Using '{self.utility_function}' utility function.")
         print(f"Metrics: {[m.name for m in self.metrics]}, Weights: {[m.weight for m in self.metrics]}, Maximize: {[m.maximize for m in self.metrics]}")
+        print(f"Feature weights: TaskMeta={self.task_meta_weight}, Semantic={self.semantic_weight}, System={self.system_weight}")
+        print(f"Distance for Meta/System: {self.distance_metric.__class__.__name__}, Distance for Semantic: {self.semantic_distance_metric.__class__.__name__}")
+
 
     def _process_metrics(self, metrics):
         """
@@ -209,7 +228,7 @@ class WarmStart:
         """
         Infers the `maximize` flag for each metric in `self.metrics` by inspecting the filtered experiences.
         If a metric is not found in any experience, defaults its `maximize` flag to True.
-        This ensures that the system is robust to missing metrics in the experience store.
+        This ensures that the process is robust to missing metrics in the experience store.
         """
         if not hasattr(self, '_experiences'):
             self._experiences = []
@@ -231,26 +250,49 @@ class WarmStart:
                 # Default to maximize True if not found in any experience
                 metric.maximize = True
 
-    def pre_warm_up(self, X_train, y_train, current_dataset_meta_features=None):
+    def pre_warm_up(self, X_train, y_train, current_task_features=None):
         """
         Prepares the current dataset and system for warm-starting by extracting and storing meta-features.
 
         Args:
             X_train: Features of the current training dataset.
             y_train: Labels of the current training dataset.
-            current_dataset_meta_features (optional): Precomputed meta-features for the dataset. If not provided, they are extracted.
+            current_task_features (optional): Precomputed task features for the dataset (a dict e.g. {"meta":..., "semantic":...}).
+                                             If not provided, or if invalid, they are extracted.
 
         Side Effects:
-            Sets `self.X_train`, `self.y_train`, `self.current_dataset_features`, and `self.current_system_features` for use in warm-up.
+            Sets `self.X_train`, `self.y_train`, `self.current_task_features`,
+            and `self.current_system_features` for use in warm-up.
         """
         self.X_train = X_train
         self.y_train = y_train
-        self.current_dataset_features = current_dataset_meta_features
+        self.current_task_features = current_task_features
         self.current_system_features = self._extract_system_features()
-        if self.current_dataset_features is None:
-            self.current_dataset_features = self._extract_meta_features(
-                self.X_train, self.y_train
+
+        recompute_task_features = False
+        if self.current_task_features is None:
+            logger.info("No precomputed task features provided or found in cache. Will extract.")
+            recompute_task_features = True
+        elif isinstance(self.current_task_features, dict):
+            # Check if essential keys like 'meta' are None. 'semantic' can sometimes be None.
+            if self.current_task_features.get("meta") is None:
+                logger.info("Provided/cached task features have 'meta' component as None. Recomputing task features.")
+                recompute_task_features = True
+            # Optionally, add more checks, e.g., if semantic is critical and is None
+            # elif "semantic" in self.current_task_features and self.current_task_features.get("semantic") is None:
+            #     logger.info("Provided/cached task features have 'semantic' component as None. Recomputing task features.")
+            #     recompute_task_features = True
+        else:
+            logger.warning(
+                f"Provided/cached task features are not a dictionary (type: {type(self.current_task_features)}). Recomputing."
             )
+            recompute_task_features = True
+        
+        if recompute_task_features:
+            logger.info("Extracting task features for the current dataset.")
+            self.current_task_features = self._extract_task_features(X_train, y_train)
+        else:
+            logger.info("Using provided/cached task features.")
 
     def warm_up(self, generator_fn):
         """
@@ -272,10 +314,7 @@ class WarmStart:
             dict or None: The updated internal probabilistic model, or None if no relevant experiences were found.
         """
         self.generator_fn = generator_fn
-        experiences = self._experiences
-
-        # Step 1: Filter experiences by feature extractors and required metrics
-        experiences = self.filter_experiences_by_feature_extractors(experiences)
+        experiences = self._experiences # already filtered experiences
 
         if not experiences:
             # No relevant experiences found, skip warmstart gracefully
@@ -283,7 +322,9 @@ class WarmStart:
 
         # Step 2: Compute distances and select relevant experiences
         distances = self.compute_distances(
-            self.current_dataset_features, self.current_system_features, experiences
+            self.current_task_features, # Changed: now a dict
+            self.current_system_features,
+            experiences
         )
 
         (
@@ -334,140 +375,246 @@ class WarmStart:
         return self._model
 
     def _normalize_features(
-        self, feature_vectors_list: List[np.ndarray]
-    ) -> List[np.ndarray]:
+        self, feature_vectors_list: List[Optional[np.ndarray]], feature_key_for_logging: str = "unknown"
+    ) -> List[Optional[np.ndarray]]:
         """
-        Applies the sequence of normalizers to a list of feature vectors.
-
+        Applies the sequence of normalizers to a list of feature vectors (for a specific feature type).
+        Handles None or empty arrays in the input list.
         Parameters:
-            feature_vectors_list (List[np.ndarray]): A list of feature vectors (numpy arrays).
-
+            feature_vectors_list (List[Optional[np.ndarray]]): A list of 1D feature vectors (numpy arrays) of the same type, or None.
+            feature_key_for_logging (str): Key name for logging purposes.
         Returns:
-            List[np.ndarray]: A list of normalized feature vectors.
+            List[Optional[np.ndarray]]: A list of normalized feature vectors, with Nones preserved.
         """
-        # Stack feature vectors for fitting
-        feature_matrix = np.vstack(feature_vectors_list)
+        if not feature_vectors_list:
+            return []
+
+        valid_feature_vectors = []
+        valid_indices = []
+        for i, fv in enumerate(feature_vectors_list):
+            if fv is not None and isinstance(fv, np.ndarray) and fv.size > 0:
+                if fv.ndim == 0: # handle 0-d arrays by reshaping
+                    fv = fv.reshape(1) 
+                elif fv.ndim > 1: # flatten if more than 1D, assuming it should be 1D
+                    fv = fv.flatten()
+                valid_feature_vectors.append(fv)
+                valid_indices.append(i)
+
+        if not valid_feature_vectors:
+            # print(f"Warning: No valid feature vectors to normalize for key '{feature_key_for_logging}'. Returning original list.")
+            return feature_vectors_list # All were None or empty
+
+        try:
+            # Check for consistent length among valid feature vectors before vstack
+            first_len = -1
+            if valid_feature_vectors:
+                first_len = len(valid_feature_vectors[0])
+                if not all(len(vec) == first_len for vec in valid_feature_vectors):
+                    # print(f"Warning: Inconsistent feature vector lengths for key '{feature_key_for_logging}'. Shapes: {[fv.shape for fv in valid_feature_vectors]}. Skipping normalization for this group.")
+                    return feature_vectors_list
+
+
+            feature_matrix = np.vstack(valid_feature_vectors)
+        except ValueError as e:
+            # print(f"Error stacking feature vectors for key '{feature_key_for_logging}': {e}. Shapes: {[fv.shape for fv in valid_feature_vectors]}. Skipping normalization.")
+            return feature_vectors_list # Return original list if stacking fails
 
         # Apply each normalizer sequentially
+        normalized_matrix = feature_matrix
         for normalizer in self.normalizers:
-            feature_matrix = normalizer.fit_transform(feature_matrix)
+            normalized_matrix = normalizer.fit_transform(normalized_matrix)
 
         # Split back into individual feature vectors
-        num_vectors = len(feature_vectors_list)
-        normalized_features_list = np.vsplit(feature_matrix, num_vectors)
+        normalized_valid_features = [vec.flatten() for vec in np.vsplit(normalized_matrix, len(valid_feature_vectors))]
 
-        # Flatten each array in the list
-        normalized_features_list = [vec.flatten() for vec in normalized_features_list]
+        # Reconstruct the original list structure with Nones
+        result_list = [None] * len(feature_vectors_list)
+        for i, norm_fv in enumerate(normalized_valid_features):
+            result_list[valid_indices[i]] = norm_fv
 
-        return normalized_features_list
+        return result_list
 
-    def _extract_meta_features(self, X_train, y_train):
-        """
-        Extracts meta-features from the current dataset using the specified feature extractor.
+    def _extract_task_features(self, X_train, y_train) -> Dict[str, Optional[np.ndarray]]:
+        if self.dataset_feature_extractor_class:
+            extractor = self.dataset_feature_extractor_class()
+            features = extractor.extract_features(X_train, y_train) # Expected to be a Dict[str, Optional[np.ndarray]]
 
-        Parameters:
-            X_train: Training data features.
-            y_train: Training data labels.
+            if not isinstance(features, dict):
+                raise ValueError(
+                    f"Dataset feature extractor {extractor.__class__.__name__} must return a dictionary. "
+                    f"Got: {type(features)}."
+                )
 
-        Returns:
-            np.ndarray: Extracted dataset meta-features.
-        """
-        extractor = self.dataset_feature_extractor_class()
-        return extractor.extract_features(X_train, y_train)
+            # Ensure 'meta' and 'semantic' keys exist and values are np.ndarray or None
+            for key in ["meta", "semantic"]:
+                if key not in features:
+                    # Consider how to handle if a key is truly optional vs. an error
+                    print(f"Warning: Dataset features dictionary from {extractor.__class__.__name__} missing key: '{key}'. Assuming None.")
+                    features[key] = None # Default to None if missing
+                
+                val = features[key]
+                if val is not None and not isinstance(val, np.ndarray):
+                    try:
+                        # Attempt conversion if it's list-like, otherwise error
+                        # This assumes feature extractors might sometimes return lists that need conversion
+                        features[key] = np.array(val, dtype=float) 
+                    except Exception as e:
+                        raise ValueError(
+                            f"Dataset features for key '{key}' from {extractor.__class__.__name__} must be np.ndarray or convertible. "
+                            f"Got type: {type(val)}. Error: {e}"
+                        )
+            return features
+        return {"meta": None, "semantic": None} # Default if no extractor
 
-    def _extract_system_features(self):
-        """
-        Extracts system features using the specified system feature extractor.
+    def _extract_system_features(self) -> Optional[np.ndarray]:
+        if self.system_feature_extractor_class:
+            extractor = self.system_feature_extractor_class()
+            features_dict = extractor.extract_features() # This returns a dict {"meta": ndarray|None, "semantic": ndarray|None}
 
-        Returns:
-            np.ndarray: Extracted system features.
-        """
-        extractor = self.system_feature_extractor_class()
-        return extractor.extract_features()
+            if features_dict is None: # Graceful handling if extractor itself returns None
+                 print(f"Warning: System feature extractor {extractor.__class__.__name__} returned None overall.")
+                 return None
+
+            if not isinstance(features_dict, dict) or "meta" not in features_dict:
+                raise ValueError(
+                    f"System feature extractor {extractor.__class__.__name__} must return a dictionary "
+                    f"with a 'meta' key. Got: {type(features_dict)}."
+                )
+
+            meta_features = features_dict.get("meta")
+
+            if meta_features is None:
+                # This is acceptable, system might not have meta features or they couldn't be extracted
+                return None 
+
+            if not isinstance(meta_features, np.ndarray):
+                try:
+                    # This conversion is a fallback; ideally, the extractor returns an ndarray directly for 'meta'
+                    meta_features = np.array(meta_features, dtype=float)
+                except Exception as e:
+                    raise ValueError(
+                        f"The 'meta' component of system features from {extractor.__class__.__name__} "
+                        f"must be a np.ndarray or convertible to one. Got: {type(meta_features)}. Error: {e}"
+                    )
+            return meta_features
+        return None
 
     def compute_distances(
         self,
-        current_dataset_features,
-        current_system_features,
+        current_task_features: Dict[str, Optional[np.ndarray]],
+        current_system_features: Optional[np.ndarray],
         experiences: List[Experience],
-    ):
+    ) -> List[float]:
+        num_experiences = len(experiences)
+        if num_experiences == 0:
+            return []
+
+        # To store final weighted distances for each experience
+        final_distances = np.zeros(num_experiences)
+        
+        # --- 1. System Features ---
+        if self.system_weight > 0 and current_system_features is not None and current_system_features.size > 0:
+            all_system_features = [exp.system_features for exp in experiences] + [current_system_features]
+            norm_all_system_features = self._normalize_features(all_system_features, "system")
+            norm_current_system = norm_all_system_features[-1]
+
+            if norm_current_system is not None:
+                # Prepare distance metric (e.g., Mahalanobis)
+                valid_exp_norm_system = [nf for nf in norm_all_system_features[:-1] if nf is not None]
+                if valid_exp_norm_system:
+                    self._prepare_distance_metric(self.distance_metric, valid_exp_norm_system + [norm_current_system])
+                
+                system_dists = np.full(num_experiences, np.inf)
+                for i, exp_norm_system in enumerate(norm_all_system_features[:-1]):
+                    if exp_norm_system is not None:
+                        system_dists[i] = self.distance_metric.compute(norm_current_system, exp_norm_system)
+                final_distances += self.system_weight * system_dists
+        elif self.system_weight > 0: # Current system features are None/empty but weight > 0
+            final_distances += self.system_weight * np.full(num_experiences, np.inf)
+
+
+        # --- 2. Task Features (Iterate through keys like "meta", "semantic") ---
+        # Expected keys in current_task_features: "meta", "semantic" (can be None)
+        feature_configs = {
+            "meta": {"weight": self.task_meta_weight, "metric": self.distance_metric},
+            "semantic": {"weight": self.semantic_weight, "metric": self.semantic_distance_metric},
+        }
+
+        for key, config in feature_configs.items():
+            weight = config["weight"]
+            dist_metric = config["metric"]
+            current_feature_vec = current_task_features.get(key)
+
+            if weight > 0 and current_feature_vec is not None and current_feature_vec.size > 0:
+                all_task_type_features = [
+                    (exp.task_features.get(key) if exp.task_features else None) for exp in experiences
+                ] + [current_feature_vec]
+                
+                norm_all_task_type_features = self._normalize_features(all_task_type_features, f"task_{key}")
+                norm_current_task_vec = norm_all_task_type_features[-1]
+
+                if norm_current_task_vec is not None:
+                    # Prepare distance metric if it's the main one (for Mahalanobis on "meta")
+                    if dist_metric == self.distance_metric:
+                        valid_exp_norm_task_type = [nf for nf in norm_all_task_type_features[:-1] if nf is not None]
+                        if valid_exp_norm_task_type:
+                             self._prepare_distance_metric(dist_metric, valid_exp_norm_task_type + [norm_current_task_vec])
+                    
+                    task_dists = np.full(num_experiences, np.inf)
+                    for i, exp_norm_task_vec in enumerate(norm_all_task_type_features[:-1]):
+                        if exp_norm_task_vec is not None:
+                            task_dists[i] = dist_metric.compute(norm_current_task_vec, exp_norm_task_vec)
+                    final_distances += weight * task_dists
+            elif weight > 0: # Current feature for this key is None/empty but weight > 0
+                final_distances += weight * np.full(num_experiences, np.inf)
+        
+        return final_distances.tolist()
+
+    def _prepare_distance_metric(self, distance_metric_instance: DistanceMetric, feature_vectors_for_metric: List[np.ndarray]):
         """
-        Computes the total distances between the current dataset/system and each past experience,
-        using the specified distance metric.
-
-        Parameters:
-            current_dataset_features (np.ndarray): Meta-features of the current dataset.
-            current_system_features (np.ndarray): System features of the current system.
-            experiences (List[Experience]): List of past experiences.
-
-        Returns:
-            List[float]: Distances corresponding to each experience.
+        Prepares a specific distance metric instance (e.g., Mahalanobis) using the given feature vectors.
+        Assumes feature_vectors_for_metric contains only valid, non-None, 1D np.ndarrays of consistent length.
         """
-        # Step 1: Combine dataset and system features for each experience
-        combined_features = []
-        for exp in experiences:
-            combined = np.concatenate((exp.dataset_features, exp.system_features))
-            combined_features.append(combined)
+        if not isinstance(distance_metric_instance, MahalanobisDistance):
+            return # Only Mahalanobis needs this preparation
 
-        # Step 2: Combine current dataset and system features
-        current_combined = np.concatenate(
-            (current_dataset_features, current_system_features)
-        )
-        combined_features.append(current_combined)  # This is the last element
+        if not feature_vectors_for_metric:
+            # print("Warning: MahalanobisDistance preparation received no feature vectors. Skipping VI computation.")
+            return
 
-        # Step 3: Normalize all combined features together
-        normalized_combined_features = self._normalize_features(combined_features)
+        # Further checks (already somewhat handled by _normalize_features, but good for direct calls)
+        if not all(isinstance(fv, np.ndarray) and fv.ndim == 1 for fv in feature_vectors_for_metric):
+            # print("Warning: MahalanobisDistance requires a list of 1D np.ndarrays. Skipping VI computation.")
+            return
+        
+        first_len = feature_vectors_for_metric[0].shape[0]
+        if not all(fv.shape[0] == first_len for fv in feature_vectors_for_metric):
+            # print("Warning: MahalanobisDistance requires all feature vectors to have the same length. Skipping VI computation.")
+            return
 
-        # Step 4: Update experiences with normalized features
-        for i, exp in enumerate(experiences):
-            combined = normalized_combined_features[i]
+        try:
+            combined_features_matrix = np.vstack(feature_vectors_for_metric)
+            # Check if there are enough samples for the number of features
+            if combined_features_matrix.shape[0] <= combined_features_matrix.shape[1]:
+                # print(f"Warning: Not enough samples ({combined_features_matrix.shape[0]}) for Mahalanobis "
+                #       f"distance with ({combined_features_matrix.shape[1]}) features. Covariance matrix may be singular. Skipping VI computation.")
+                return
 
-            # Assuming you want to keep dataset and system features separate
-            dataset_length = len(exp.dataset_features)
-            exp.dataset_features = combined[:dataset_length]
-            exp.system_features = combined[dataset_length:]
+            covariance = np.cov(combined_features_matrix, rowvar=False)
+            # Add a small regularization term to the diagonal to improve stability
+            reg_term = 1e-6 * np.eye(covariance.shape[0])
+            VI = np.linalg.inv(covariance + reg_term)
+            # print(f"Computed VI for {distance_metric_instance.__class__.__name__}")
+            distance_metric_instance.set_VI(VI)
+        except np.linalg.LinAlgError:
+            # print(f"LinAlgError computing VI for {distance_metric_instance.__class__.__name__} even after regularization. Distance may not be reliable.")
+            # Optionally, fall back to Euclidean or skip setting VI
+            pass # VI will not be set, Mahalanobis will raise error or use identity if VI is None
+        except ValueError as e: # Can happen if combined_features_matrix is empty or other issues
+            # print(f"ValueError preparing Mahalanobis for {distance_metric_instance.__class__.__name__}: {e}. Skipping VI computation.")
+            pass
 
-        # Step 5: Get normalized current combined features
-        normalized_current_combined = normalized_combined_features[-1]
-        current_features = normalized_current_combined
-
-        # Step 6: Prepare the distance metric (e.g., compute and set VI for Mahalanobis)
-        self._prepare_distance_metric(normalized_combined_features)
-
-        # Step 7: Compute distances
-        distances = []
-        for exp in experiences:
-            exp_features = np.concatenate((exp.dataset_features, exp.system_features))
-            distance = self.distance.compute(current_features, exp_features)
-            distances.append(distance)
-
-        return distances
-
-    def _prepare_distance_metric(self, combined_features: np.ndarray):
-        """
-        Prepares the distance metric by computing and setting necessary parameters,
-        such as the inverse covariance matrix for MahalanobisDistance.
-
-        Parameters:
-            combined_features (np.ndarray): Combined normalized features from datasets and systems.
-
-        Returns:
-            None
-        """
-        if isinstance(self.distance, MahalanobisDistance):
-            covariance = np.cov(combined_features, rowvar=False)
-            try:
-                VI = np.linalg.inv(covariance)
-                print("Computed VI first try")
-            except np.linalg.LinAlgError:
-                # Regularize covariance matrix to make it invertible
-                regularization_term = 1e-6 * np.eye(covariance.shape[0])
-                VI = np.linalg.inv(covariance + regularization_term)
-                print("Computed VI after regularization")
-
-            self.distance.set_VI(VI)
-
-    def select_experiences(self, experiences: List[Experience], distances):
+    def select_experiences(self, experiences: List[Experience], distances: List[float]): # Added type hint for distances
         # Pair each experience with its distance
         experience_distance_pairs = list(zip(experiences, distances))
 
@@ -480,19 +627,23 @@ class WarmStart:
                     return m.get("value")
             return None
 
-        # Use the first metric in self.metrics for positive/negative filtering
-        main_metric = self.metrics[0]
-        threshold = self.positive_min_threshold
-
+        # Use all metrics in self.metrics for positive/negative filtering
         positive_experiences = []
         negative_experiences = []
+
         for exp, dist in experience_distance_pairs:
-            val = get_metric_value(exp, main_metric.name)
-            if val is not None and val != -np.Infinity:
-                if (main_metric.maximize and val >= threshold) or (not main_metric.maximize and val <= threshold):
-                    positive_experiences.append((exp, dist))
-                else:
-                    negative_experiences.append((exp, dist))
+            all_metrics_valid = True
+            if not self.metrics: # If no metrics are defined, consider all experiences as potentially positive (or handle as an error/warning)
+                all_metrics_valid = True # Or False, depending on desired behavior for empty self.metrics
+            else:
+                for metric_spec in self.metrics:
+                    val = get_metric_value(exp, metric_spec.name)
+                    if val is None or val == -np.Infinity or val == np.Infinity:
+                        all_metrics_valid = False
+                        break
+            
+            if all_metrics_valid:
+                positive_experiences.append((exp, dist))
             else:
                 negative_experiences.append((exp, dist))
 
@@ -523,35 +674,39 @@ class WarmStart:
             negative_distances,
         )
 
-    def filter_experiences_by_feature_extractors(
+    def filter_experiences(
         self, experiences: List[Experience]
     ) -> List[Experience]:
         """
         Filters experiences to include only those that:
         - Used the same feature extractors as the current configuration.
         - Contain all required metrics as specified in self.metrics.
+        For negative/error experiences, if no metrics are specified, allow inclusion if error is present.
 
         Parameters:
             experiences (List[Experience]): A list of past experiences.
 
         Returns:
-            List[Experience]: A list of experiences that used the same feature extractors and have all required metrics.
+            List[Experience]: A list of experiences that used the same feature extractors and have all required metrics (or error for negative).
         """
         dataset_extractor_name = self.dataset_feature_extractor_class.__name__
         system_extractor_name = self.system_feature_extractor_class.__name__
         required_metric_names = {m.name for m in self.metrics}
 
         def has_all_required_metrics(exp):
-            # exp.metrics may be None, a list of Metric or dict
-            if not exp.metrics:
-                return False
-            found = set()
-            for m in exp.metrics:
-                if hasattr(m, "name"):
-                    found.add(m.name)
-                elif isinstance(m, dict) and "name" in m:
-                    found.add(m["name"])
-            return required_metric_names.issubset(found)
+            if required_metric_names:
+                # exp.metrics may be None, a list of Metric or dict
+                if not exp.metrics:
+                    return False
+                found = set()
+                for m in exp.metrics:
+                    if hasattr(m, "name"):
+                        found.add(m.name)
+                    elif isinstance(m, dict) and "name" in m:
+                        found.add(m["name"])
+                return required_metric_names.issubset(found)
+            # If no metrics specified ignore the experience
+            return False
 
         filtered_experiences = [
             exp
@@ -579,6 +734,18 @@ class WarmStart:
                 else None
             )
         )
+
+    @staticmethod
+    def _get_metric_value_from_exp(exp: "Experience", metric_name: str) -> Optional[float]:
+        if exp.metrics is None:
+            return None
+        for m in exp.metrics:
+            # Support both Metric object and dict
+            if hasattr(m, "name") and m.name == metric_name:
+                return m.value
+            elif isinstance(m, dict) and m.get("name") == metric_name:
+                return m.get("value")
+        return None
 
     def compute_learning_rates(
         self,
@@ -639,77 +806,111 @@ class WarmStart:
         # Initialize utilities. We'll compute them based on the utility function
         utilities = [0.0] * len(selected_positive_experiences)
 
-        if (
+        if not selected_positive_experiences: # No positive experiences to compute utility for
+            pass # utilities will remain all 0.0
+        elif (
             self.utility_function == "linear_front"
             or self.utility_function == "logarithmic_front"
         ):
             # Build objectives matrix for non-dominated sort
             objectives = []
             for exp in selected_positive_experiences:
-                obj = []
-                for metric in self.metrics:
-                    val = None
-                    for m in (exp.metrics or []):
-                        if hasattr(m, "name") and m.name == metric.name:
-                            val = m.value
-                            break
-                        elif isinstance(m, dict) and m.get("name") == metric.name:
-                            val = m.get("value")
-                            break
-                    obj.append(val if val is not None else (-np.Infinity if metric.maximize else np.Infinity))
-                objectives.append(obj)
-            fronts = non_dominated_sort(objectives, maximize=[m.maximize for m in self.metrics])
-            num_fronts = len(fronts)
-            for front_idx, front in enumerate(fronts):
-                front_utility = self.__compute_front_utility(front_idx, num_fronts)
-                for idx in front:
-                    utilities[idx] = front_utility
+                obj_vector = []
+                for metric_spec in self.metrics: # metric_spec is MetricSpec
+                    val = WarmStart._get_metric_value_from_exp(exp, metric_spec.name)
+                    
+                    actual_val_for_sort: float
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        actual_val_for_sort = -np.Infinity if metric_spec.maximize else np.Infinity
+                    elif isinstance(val, float) and math.isinf(val):
+                        actual_val_for_sort = val 
+                    else: # Finite number
+                        actual_val_for_sort = float(val) # Ensure it's float
+                    obj_vector.append(actual_val_for_sort)
+                objectives.append(obj_vector)
+            
+            if objectives: # Ensure objectives is not empty before calling non_dominated_sort
+                # Assuming non_dominated_sort is available in the scope
+                # from autogoal.search._nsga2 import non_dominated_sort # Example import
+                fronts = non_dominated_sort(objectives, maximize=[m.maximize for m in self.metrics])
+                num_fronts = len(fronts)
+                for front_idx, front in enumerate(fronts):
+                    front_utility = self.__compute_front_utility(front_idx, num_fronts)
+                    for original_exp_idx_in_objectives_list in front:
+                        utilities[original_exp_idx_in_objectives_list] = front_utility
+        
         elif self.utility_function == "weighted_sum":
-            # Group by alias
             experience_groups = {}
             for i, exp in enumerate(selected_positive_experiences):
-                alias = exp.alias or "Unknown"
+                alias = exp.alias or "Unknown" # Group by alias
                 if alias not in experience_groups:
-                    experience_groups[alias] = {"experiences": [], "indexes": []}
+                    experience_groups[alias] = {"experiences": [], "original_indices": []}
                 experience_groups[alias]["experiences"].append(exp)
-                experience_groups[alias]["indexes"].append(i)
-            for alias, group_experiences in experience_groups.items():
-                group_positive_experiences = group_experiences["experiences"]
-                group_positive_indexes = group_experiences["indexes"]
-                if not group_positive_experiences:
+                experience_groups[alias]["original_indices"].append(i)
+
+            for alias, group_data in experience_groups.items():
+                group_exp_list = group_data["experiences"]
+                group_original_indices = group_data["original_indices"]
+
+                if not group_exp_list:
                     continue
-                # For each metric, collect values
-                metric_values = [[] for _ in self.metrics]
-                for exp in group_positive_experiences:
-                    for j, metric in enumerate(self.metrics):
-                        val = None
-                        for m in (exp.metrics or []):
-                            if hasattr(m, "name") and m.name == metric.name:
-                                val = m.value
-                                break
-                            elif isinstance(m, dict) and m.get("name") == metric.name:
-                                val = m.get("value")
-                                break
-                        metric_values[j].append(val if val is not None else 0.0)
-                # Normalize each metric
-                normalized_metrics = []
-                for j, vals in enumerate(metric_values):
-                    maximize = self.metrics[j].maximize
-                    if maximize:
-                        max_v = max(vals) or 1.0
-                        norm = [v / max_v for v in vals]
+
+                # Stores normalized scores for each metric for all experiences in this group
+                # Outer list: metrics, Inner list: scores for experiences in group_exp_list
+                all_metrics_normalized_scores_for_group = []
+
+                for metric_spec in self.metrics:
+                    metric_name = metric_spec.name
+                    maximize = metric_spec.maximize
+                    
+                    current_metric_values_in_group = [WarmStart._get_metric_value_from_exp(exp, metric_name) for exp in group_exp_list]
+                    
+                    # Filter out None, NaN, Inf to find min/max from valid numbers
+                    valid_numeric_values = [
+                        v for v in current_metric_values_in_group 
+                        if v is not None and isinstance(v, (int, float)) and not math.isnan(v) and not math.isinf(v)
+                    ]
+                    
+                    normalized_scores_for_this_metric = [0.0] * len(group_exp_list)
+
+                    if not valid_numeric_values:
+                        # All values are None, NaN, Inf, or list is empty; all get normalized score 0
+                        pass # Already initialized to 0.0
                     else:
-                        min_v = min(vals)
-                        max_v = max(vals)
-                        rng = max_v - min_v if max_v != min_v else 1.0
-                        norm = [1 - ((v - min_v) / rng) for v in vals]
-                    normalized_metrics.append(norm)
-                # Weighted sum
-                for i, idx in enumerate(group_positive_indexes):
-                    utility = sum(self.metrics[j].weight * normalized_metrics[j][i] for j in range(len(self.metrics)))
-                    utilities[idx] = utility
+                        min_val = min(valid_numeric_values)
+                        max_val = max(valid_numeric_values)
+                        range_val = max_val - min_val
+
+                        for i, value in enumerate(current_metric_values_in_group):
+                            if value is None or not isinstance(value, (int, float)) or math.isnan(value) or math.isinf(value):
+                                normalized_scores_for_this_metric[i] = 0.0  # Worst score
+                            elif range_val == 0:
+                                # All valid values are the same.
+                                normalized_scores_for_this_metric[i] = 0.5 # Neutral score
+                            else:
+                                if maximize:
+                                    normalized_scores_for_this_metric[i] = (value - min_val) / range_val
+                                else: # Minimize
+                                    normalized_scores_for_this_metric[i] = (max_val - value) / range_val
+                            # Clamp to [0,1] just in case of floating point issues, though theoretically should be within
+                            normalized_scores_for_this_metric[i] = np.clip(normalized_scores_for_this_metric[i], 0.0, 1.0)
+
+
+                    all_metrics_normalized_scores_for_group.append(normalized_scores_for_this_metric)
+                
+                # Calculate final utility for each experience in the group
+                for i, original_idx in enumerate(group_original_indices): # i is index within the group
+                    utility_score = 0.0
+                    if self.metrics: # Ensure there are metrics to sum
+                        for metric_idx, metric_spec in enumerate(self.metrics):
+                            utility_score += metric_spec.weight * all_metrics_normalized_scores_for_group[metric_idx][i]
+                        utilities[original_idx] = utility_score / sum(m.weight for m in self.metrics) if sum(m.weight for m in self.metrics) > 0 else 0 # Normalize by sum of weights
+                    else:
+                        utilities[original_idx] = 0 # No metrics, no utility
+
+
         else:
-            raise ValueError("Invalid utility function.")
+            raise ValueError(f"Invalid utility function: {self.utility_function}.")
 
         # ------------------------------------------------------
         # 4) Compute alpha for each positive experience based on utility and distances
@@ -750,7 +951,7 @@ class WarmStart:
 
         return experience_alphas
 
-    def compute_distance_decay_beta(self, all_distances: List[float]):
+    def compute_distance_decay_beta(self, all_distances: List[float]): # Added type hint
         # Compute statistics of distances
         if not all_distances:
             return self.beta_scale  # Default fallback

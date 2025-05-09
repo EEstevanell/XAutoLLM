@@ -4,12 +4,14 @@ import psutil
 import subprocess
 import shutil
 from autogoal.meta_learning.feature_extraction._base import FeatureExtractor
+from typing import Dict, Optional, Mapping # Removed List
+import numpy as np # Ensure numpy is imported
 
 class SystemFeatureExtractor(FeatureExtractor):
     def __init__(self, gpu_device_id: str = None):
         self.gpu_device_id = gpu_device_id
 
-    def extract_features(self, *args, **kwargs) -> np.ndarray:
+    def extract_features(self, *args, **kwargs) -> Mapping[str, Optional[np.ndarray]]: # Updated return type hint
         # CPU Information
         cpu_physical_cores = self._get_cpu_physical_cores()
         cpu_logical_cores = self._get_cpu_logical_cores()
@@ -31,7 +33,7 @@ class SystemFeatureExtractor(FeatureExtractor):
             gpu_total_memory,
         ], dtype=np.float32)
 
-        return feature_vector
+        return {"meta": feature_vector, "semantic": None} # Return np.ndarray directly
 
     def _get_cpu_physical_cores(self):
         try:

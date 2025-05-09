@@ -67,7 +67,7 @@ class GenerativeTaskFeatureExtractor(FeatureExtractor):
             # Return NaNs for regular, zeros for semantic
             regular = np.full(self.NUM_REGULAR_FEATURES, np.nan)
             semantic = np.zeros(self.EMBEDDING_DIM)
-            return (regular.tolist(), semantic.tolist()) # Convert to list
+            return {"meta": regular.tolist(), "semantic": semantic.tolist()} # Updated return format
 
         # 1. Number of samples
         n_samples = float(len(X_train))
@@ -157,5 +157,5 @@ class GenerativeTaskFeatureExtractor(FeatureExtractor):
         # Semantic feature: mean prompt embedding
         mean_prompt_embedding = np.mean(embeddings_prompt, axis=0) if embeddings_prompt.size > 0 else np.zeros(self.EMBEDDING_DIM)
 
-        return (regular_feature_vector.tolist(), mean_prompt_embedding.tolist()) # Convert to list
+        return {"meta": regular_feature_vector, "semantic": mean_prompt_embedding} # Return np.ndarray directly
 

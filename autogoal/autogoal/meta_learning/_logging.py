@@ -4,103 +4,10 @@ import json
 import statistics
 from typing import Any, Dict, List, Optional, Union
 from autogoal.kb._algorithm import Algorithm, AlgorithmBase, Pipeline
+from autogoal.meta_learning.utils import extract_algorithms_from_pipeline
 from autogoal.search import Logger
 from autogoal.meta_learning._experience import Experience, ExperienceStore, Metric
-
-def sanitize_for_json(value):
-    """
-    Recursively sanitizes a value to ensure it is JSON serializable.
     
-    Parameters:
-        value: The value to sanitize.
-    
-    Returns:
-        A JSON-serializable version of the value.
-    """
-    if value is None:
-        return None
-    elif isinstance(value, (str, int, float, bool)):
-        return value
-    elif isinstance(value, (list, tuple, set)):
-        return [sanitize_for_json(item) for item in value]
-    elif isinstance(value, dict):
-        return {str(k): sanitize_for_json(v) for k, v in value.items()}
-    elif isinstance(value, (AlgorithmBase, Pipeline)):
-        # For algorithms and pipelines, extract their info recursively
-        return extract_algorithm_info(value) if isinstance(value, Algorithm) else extract_algorithms_from_pipeline(value)
-    else:
-        # Attempt to serialize; if fails, exclude the value
-        try:
-            json.dumps(value)
-            return value
-        except TypeError:
-            # Exclude the value
-            return None
-    
-def extract_algorithms_from_pipeline(pipeline: Pipeline) -> List[Dict[str, Any]]:
-    """
-    Extracts algorithms and their parameters from the given pipeline in a recursive manner,
-    capturing only the parameters defined in each algorithm's __init__ method.
-
-    Parameters:
-        pipeline (Pipeline): The pipeline object to extract information from.
-
-    Returns:
-        List[Dict[str, Any]]: A list of dictionaries where each dictionary has the algorithm class name
-                              as the key and its sanitized parameters as the value, recursively.
-    """
-    if pipeline is None:
-        return []
-
-    algorithms_info = []
-
-    for alg in pipeline.algorithms:
-        alg_info = extract_algorithm_info(alg)
-        algorithms_info.append(alg_info)
-
-    return algorithms_info
-
-def extract_algorithm_info(alg: Algorithm) -> Dict[str, Any]:
-    """
-    Recursively extracts information from an algorithm, capturing only the parameters defined in its __init__ method.
-
-    Parameters:
-        alg (Algorithm): The algorithm to extract information from.
-
-    Returns:
-        Dict[str, Any]: A dictionary with the algorithm class name as key and its sanitized parameters as value.
-    """
-    class_name = alg.__class__.__name__
-    parameters = {}
-
-    # Retrieve the signature of the __init__ method
-    signature = alg.__class__.get_inner_signature()
-    for param_name, param_obj in signature.parameters.items():
-        if param_name in ["self", "args", "kwargs"]:
-            continue
-
-        annotation_cls = param_obj.annotation
-        if annotation_cls == inspect.Parameter.empty:
-            continue
-        
-        value = getattr(alg, param_name, None)
-        sanitized_value = sanitize_for_json(value)
-        if sanitized_value is not None:
-            if hasattr(annotation_cls, "__name__"):
-                parameters[param_name] = {
-                    "annotation": annotation_cls.__name__,
-                    "value": sanitized_value,
-                } 
-            else:
-                parameters[param_name] = {
-                    "value": sanitized_value,
-                }
-        else:
-            pass
-        
-    return { class_name: parameters }
-
-
 class ExperienceLogger(Logger):
     def __init__(
         self,
@@ -136,11 +43,12 @@ class ExperienceLogger(Logger):
 
     def error(self, e: Exception, solution, objective_names=None, objective_maximize=None):
         # Log the experience with error information
-        self.log_experience(
-            solution=solution,
-            metrics=None, # Changed
-            error=e,
-        )
+        # self.log_experience(
+        #     solution=solution,
+        #     metrics=None, # Changed
+        #     error=e,
+        # )
+        pass
 
     def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
         metrics: list = []
@@ -173,7 +81,7 @@ class ExperienceLogger(Logger):
                             print(f"ExperienceLogger Warning: Could not process time observation for {time_type}: {e}")
             for k, v_obs in observations.items():
                 if k != "time" and isinstance(v_obs, (int, float)):
-                    metric_key = f"obs_{k}"
+                    metric_key = f"{k}"
                     if not any(m.name == metric_key for m in metrics):
                         metrics.append(Metric(name=metric_key, maximize=True, value=float(v_obs)))
                     elif not any(m.name == k for m in metrics):
@@ -214,9 +122,10 @@ class ExperienceLogger(Logger):
                     metric_objs.append(m)
                 elif isinstance(m, dict):
                     metric_objs.append(Metric(**m))
+                    
         experience = Experience(
             algorithms=algorithms_info,
-            dataset_features=self.dataset_features,
+            task_features=self.dataset_features,
             system_features=self.system_features,
             dataset_feature_extractor_name=self.dataset_feature_extractor_name,
             system_feature_extractor_name=self.system_feature_extractor_name,
