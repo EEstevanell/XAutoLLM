@@ -31,8 +31,6 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 # Import the configuration generator
-from text_generation.src.experiment_config_generator import ExperimentConfigGenerator
-
 
 def _serialize_task_features(task_features: Dict[str, Optional[np.ndarray]]) -> Dict[str, Optional[List[float]]]:
     """Converts np.ndarray features in the task features dictionary to lists for JSON serialization."""
@@ -355,7 +353,6 @@ class ExperimentExecutor:
             CudaNotFoundError: If no CUDA devices are available
         """
         self.experiment_type = "multi"
-        self.config_generator = ExperimentConfigGenerator(self.experiment_type)
         self.experiments = []
         self.cuda_device_count = self._detect_cuda_devices()
         self.cpu_count = cpu_count()
