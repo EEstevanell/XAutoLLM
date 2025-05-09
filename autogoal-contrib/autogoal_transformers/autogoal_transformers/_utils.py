@@ -131,7 +131,17 @@ TASK_TO_BASE_MODELS = {
         "mistralai/Mixtral-8x7B-Instruct-v0.1",
         "mistralai/Mistral-7B-v0.1",
         "mistralai/Mistral-7B-Instruct-v0.2",
-        "mistralai/Mistral-7B-Instruct-v0.1"
+        "mistralai/Mistral-7B-Instruct-v0.1",
+        
+        # LLAMA
+        "meta-llama/Llama-3.2-1B",
+        "meta-llama/Llama-3.2-1B-Instruct",
+        "meta-llama/Llama-3.2-3B",
+        "meta-llama/Llama-3.2-3B-Instruct",
+        "meta-llama/Llama-3.1-8B",
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "meta-llama/Llama-3.1-70B",
+        "meta-llama/Llama-3.1-70B-Instruct",
     ]
 }
 
@@ -142,7 +152,7 @@ def get_base_hf_models(target_task):
         return []
     
 def get_model_config(modelId):
-    config = AutoConfig.from_pretrained(modelId, use_auth_token=os.getenv('HUGGINGFACE_HUB_TOKEN'), trust_remote_code=True)
+    config = AutoConfig.from_pretrained(modelId, trust_remote_code=True)
     return config
 
 def get_models_info(target_task):
