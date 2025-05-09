@@ -21,6 +21,28 @@ from multiprocessing import Process, Manager, cpu_count
 from autogoal.ml.metrics import evaluation_time
 import psutil
 import numpy as np
+import socket
+
+def has_internet(host="8.8.8.8", port=53, timeout=3):
+    """
+    Checks for internet connectivity by making an HTTP request to a known URL.
+    Returns True if successful, False otherwise.
+    """
+    import urllib.request
+    try:
+        urllib.request.urlopen("http://www.google.com", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+# Set PYTHONPATH for subprocesses (so child processes inherit it)
+import os
+os.environ["PYTHONPATH"] = f"/home/coder/autogoal/experiments:/home/coder/autogoal/experiments/text_classification:" + os.environ.get("PYTHONPATH", "")
+
+if not has_internet():
+    print("No network – skipping downloads or exiting")
+    sys.exit(0)
 
 # Try importing torch for CUDA device detection
 try:
