@@ -344,6 +344,22 @@ class ExperimentExecutor:
 
         import sys
 
+        # --- Set random seeds for reproducibility ---
+        import random
+        import numpy as np
+        try:
+            import torch
+            seed = experiment_data.get("config", dict()).get("seed", 42)
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
+        except Exception as e:
+            print(f"[PID {os.getpid()}] Could not set random seeds: {e}")
+
         # Now safe to import torch and all other modules
         from autogoal.meta_learning.distance import (
             CosineDistance,
