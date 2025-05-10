@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from multiprocessing import Process, Manager, cpu_count
+from autogoal.datasets import drop
 from autogoal.ml.metrics import evaluation_time
 import psutil
 import numpy as np
@@ -369,6 +370,7 @@ class ExperimentExecutor:
         dataset_dict = {
             "cnn_dailymail": cnn_dailymail,
             "squad": squad,
+            "drop": drop,
         }
 
         experiment_id = experiment_data["experiment_id"]
@@ -495,7 +497,7 @@ class ExperimentExecutor:
                 random_state=seed,
                 registry=algorithm_registry,
                 evaluation_timeout=1.5 * Hour,
-                memory_limit=35 * Gb,
+                memory_limit=45 * Gb,
                 # multi-objective baseline uses 48 hours for search timeout
                 search_timeout=48 * Hour if is_baseline else 24 * Hour,
                 cross_validation_steps=1,
