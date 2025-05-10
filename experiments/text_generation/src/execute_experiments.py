@@ -241,7 +241,7 @@ class ExperimentExecutor:
         squad_f1 = squad.compute_squad_f1
         squad_exact_match = squad.compute_squad_exact_match
         drop_f1 = drop.compute_f1
-        drop_exact_match = drop.compute_drop_exact_match
+        drop_exact_match = drop.compute_exact_match
 
         if squad_f1 is None or squad_exact_match is None:
             raise ImportError("squad.py must define compute_f1 and compute_exact_match")

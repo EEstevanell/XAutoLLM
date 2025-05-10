@@ -138,45 +138,6 @@ def compute_exact_match(predictions: List[str], references: List[str], *args, **
     """
     results = compute_drop_f1_em_metric(predictions, references)
     return results.get("exact_match", 0.0)
-    """
-    Computes the F1 and Exact Match (EM) scores for the DROP dataset (multi-span, multi-reference).
-    Args:
-        predictions (List[str]): Each is a JSON string decoding to a list of predicted answer spans.
-        references (List[str]): Each is a JSON string decoding to an object with "spans" (list of gold answer spans).
-    Returns:
-        Dict[str, float]: {"f1": ..., "exact_match": ...}
-    """
-    if len(predictions) != len(references):
-        raise ValueError("Predictions and references must have the same length.")
-
-    total_f1 = 0.0
-    total_em = 0.0
-    count = 0
-    for pred_json_str, ref_json_str in zip(predictions, references):
-        # Parse prediction
-        try:
-            pred_spans = json.loads(pred_json_str)
-            if not isinstance(pred_spans, list):
-                pred_spans = [str(pred_spans)]
-            pred_spans = [str(s) for s in pred_spans]
-        except Exception:
-            pred_spans = []
-        # Parse reference
-        try:
-            ref_obj = json.loads(ref_json_str)
-            gold_spans = ref_obj.get("spans", [])
-            if not isinstance(gold_spans, list):
-                gold_spans = [str(gold_spans)]
-            gold_spans = [str(s) for s in gold_spans]
-        except Exception:
-            gold_spans = []
-        f1, em = _multi_span_metric(pred_spans, gold_spans)
-        total_f1 += f1
-        total_em += em
-        count += 1
-    if count == 0:
-        return {"f1": 0.0, "exact_match": 0.0}
-    return {"f1": total_f1 / count, "exact_match": total_em / count}
 
 def load(make_prompt: bool, *args, **kwargs) -> Tuple[
     Union[List[Tuple[str, str]], List[str]], 
@@ -365,6 +326,20 @@ def test_drop_metrics():
     refs = ['{not valid json']
     result = compute_drop_f1_em_metric(preds, refs)
     assert result["f1"] == 0.0 and result["exact_match"] == 0.0, f"Failed malformed ref: {result}"
+
+    # 11. Prediction has more spans than gold
+    preds = [pred_json(["one", "two", "three"])]
+    refs = [ref_json(["one", "two"])]
+    result = compute_drop_f1_em_metric(preds, refs)
+    expected_f1_case_11 = (1.0 + 1.0 + 0.0) / 3.0
+    assert abs(result["f1"] - expected_f1_case_11) < 1e-6 and result["exact_match"] == 0.0, f"Failed pred > gold: {result}, expected F1 approx {expected_f1_case_11}"
+
+    # 12. Gold has more spans than prediction
+    preds = [pred_json(["one", "two"])]
+    refs = [ref_json(["one", "two", "three"])]
+    result = compute_drop_f1_em_metric(preds, refs)
+    expected_f1_case_12 = (1.0 + 1.0 + 0.0) / 3.0
+    assert abs(result["f1"] - expected_f1_case_12) < 1e-6 and result["exact_match"] == 0.0, f"Failed gold > pred: {result}, expected F1 approx {expected_f1_case_12}"
 
     print("All DROP metric unit tests passed.")
 

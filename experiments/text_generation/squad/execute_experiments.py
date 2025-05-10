@@ -191,7 +191,7 @@ EXPERIMENT_ID = f"squad_{int(time.time())}"
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../output/"))
 # Define path to squad.json at the workspace root
 SQUAD_JSON_PATH = Path(__file__).resolve().parent / "squad.json"
-CNN_DAILYMAIL_JSON_PATH = Path(__file__).resolve().parent / "cnn_dailymail.json"
+CNN_DAILYMAIL_JSON_PATH = Path(__file__).resolve().parent / "drop.json"
 RANDOM_SEED = 42
 TIME_BUDGET = 48 * Hour
 EVAL_TIMEOUT = 1.5 * Hour
@@ -291,8 +291,8 @@ def main():
             # FineTuneGenLLMTask,
             PartialFineTuneGenLLMTask, 
             # LoraGenLLMTask,
-            TEXT_GEN_Gpt2,
-            # TEXT_GEN_Meta_Llama_Llama_32_1B,
+            # TEXT_GEN_Gpt2,
+            TEXT_GEN_Meta_Llama_Llama_32_1B,
             # TEXT_GEN_Microsoft_Phi_4_Mini_Instruct,
             # TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
             # TEXT_GEN_Mistralai_Mistral_7B_V01,
@@ -385,12 +385,10 @@ def main():
     except Exception as e:
         logger.error(f"Error caching features to {CNN_DAILYMAIL_JSON_PATH}: {e}")
 
-    return
-
     objectives = [
         {
-            "name": "rouge-L",
-            "metric": compute_rougeL,
+            "name": "f1",
+            "metric": drop.compute_f1,
             "maximize": True,
         },
         {
@@ -426,7 +424,7 @@ def main():
         # Objective functions. Multi-objective experiments use macro_f1_plain and evaluation_time
         objectives=objectives,
         # Additional observations for logging
-        observations=[("Evaluation Time", evaluation_time), ("rouge-L", compute_rougeL)],
+        observations=[("exact match", drop.compute_exact_match)],
         # baseline uses original search algorithm
         search_algorithm=optimizer,
         # warm_start is None if baseline, otherwise it is the prepared WarmStart object
