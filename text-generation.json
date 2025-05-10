@@ -1,1 +1,773 @@
-[{"name": "google-t5/t5-small", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 6, "hidden_size": 512, "num_attention_heads": 8}}, {"name": "google-t5/t5-base", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 12, "hidden_size": 768, "num_attention_heads": 12}}, {"name": "google-t5/t5-large", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 1024, "num_attention_heads": 16}}, {"name": "google-t5/t5-3b", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5WithLMHeadModel"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 1024, "num_attention_heads": 32}}, {"name": "google-t5/t5-11b", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5WithLMHeadModel"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 1024, "num_attention_heads": 128}}, {"name": "google/flan-t5-base", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 12, "hidden_size": 768, "num_attention_heads": 12}}, {"name": "google/flan-t5-large", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 1024, "num_attention_heads": 16}}, {"name": "google/flan-t5-xxl", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 4096, "num_attention_heads": 64}}, {"name": "google/flan-t5-xl", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "t5", "architectures": ["T5ForConditionalGeneration"], "vocab_size": 32128, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 24, "hidden_size": 2048, "num_attention_heads": 32}}, {"name": "facebook/bart-base", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1", "2": "LABEL_2"}, "model_type": "bart", "architectures": ["BartModel"], "vocab_size": 50265, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 6, "hidden_size": 768, "num_attention_heads": 12}}, {"name": "facebook/bart-large", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1", "2": "LABEL_2"}, "model_type": "bart", "architectures": ["BartModel"], "vocab_size": 50265, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": true, "num_layers": 12, "hidden_size": 1024, "num_attention_heads": 16}}, {"name": "google/gemma-3-4b-it-qat-q4_0-gguf", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gemma", "architectures": null, "vocab_size": 256000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3072, "num_attention_heads": 16}}, {"name": "google/gemma-3-12b-it-qat-q4_0-gguf", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gemma", "architectures": null, "vocab_size": 256000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3072, "num_attention_heads": 16}}, {"name": "google/gemma-3-27b-it-qat-q4_0-gguf", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gemma", "architectures": null, "vocab_size": 256000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3072, "num_attention_heads": 16}}, {"name": "deepseek-ai/DeepSeek-V2-Lite", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "deepseek_v2", "architectures": ["DeepseekV2ForCausalLM"], "vocab_size": 102400, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 27, "hidden_size": 2048, "num_attention_heads": 16}}, {"name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "vocab_size": 151936, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 1536, "num_attention_heads": 12}}, {"name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "vocab_size": 152064, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3584, "num_attention_heads": 28}}, {"name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "vocab_size": 152064, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 48, "hidden_size": 5120, "num_attention_heads": 40}}, {"name": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "llama", "architectures": ["LlamaForCausalLM"], "vocab_size": 128256, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "gpt2", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gpt2", "architectures": ["GPT2LMHeadModel"], "vocab_size": 50257, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 12, "hidden_size": 768, "num_attention_heads": 12}}, {"name": "gpt2-medium", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gpt2", "architectures": ["GPT2LMHeadModel"], "vocab_size": 50257, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 24, "hidden_size": 1024, "num_attention_heads": 16}}, {"name": "gpt2-large", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gpt2", "architectures": ["GPT2LMHeadModel"], "vocab_size": 50257, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 36, "hidden_size": 1280, "num_attention_heads": 20}}, {"name": "gpt2-xl", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "gpt2", "architectures": ["GPT2LMHeadModel"], "vocab_size": 50257, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 48, "hidden_size": 1600, "num_attention_heads": 25}}, {"name": "microsoft/Phi-3.5-mini-instruct", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "phi3", "architectures": ["Phi3ForCausalLM"], "vocab_size": 32064, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 3072, "num_attention_heads": 32}}, {"name": "microsoft/Phi-4-mini-instruct", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "phi3", "architectures": ["Phi3ForCausalLM"], "vocab_size": 200064, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 3072, "num_attention_heads": 24}}, {"name": "microsoft/Phi-4", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "phi3", "architectures": ["Phi3ForCausalLM"], "vocab_size": 100352, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 40, "hidden_size": 5120, "num_attention_heads": 40}}, {"name": "microsoft/Phi-4-reasoning", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "phi3", "architectures": ["Phi3ForCausalLM"], "vocab_size": 100352, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 40, "hidden_size": 5120, "num_attention_heads": 40}}, {"name": "microsoft/Phi-3-medium-4k-instruct", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "phi3", "architectures": ["Phi3ForCausalLM"], "vocab_size": 32064, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 40, "hidden_size": 5120, "num_attention_heads": 40}}, {"name": "mistralai/Mistral-Nemo-Instruct-FP8-2407", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "mistral", "architectures": null, "vocab_size": 32000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "mistralai/Mixtral-8x7B-Instruct-v0.1", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "mixtral", "architectures": ["MixtralForCausalLM"], "vocab_size": 32000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "mistralai/Mistral-7B-v0.1", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "mistral", "architectures": ["MistralForCausalLM"], "vocab_size": 32000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "mistralai/Mistral-7B-Instruct-v0.2", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "mistral", "architectures": ["MistralForCausalLM"], "vocab_size": 32000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "mistralai/Mistral-7B-Instruct-v0.1", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "mistral", "architectures": ["MistralForCausalLM"], "vocab_size": 32000, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 32, "hidden_size": 4096, "num_attention_heads": 32}}, {"name": "meta-llama/Llama-3.2-1B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "llama", "architectures": ["LlamaForCausalLM"], "vocab_size": 128256, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 16, "hidden_size": 2048, "num_attention_heads": 32}}, {"name": "meta-llama/Llama-3.2-1B-Instruct", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "llama", "architectures": ["LlamaForCausalLM"], "vocab_size": 128256, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 16, "hidden_size": 2048, "num_attention_heads": 32}}, {"name": "meta-llama/Llama-3.2-3B", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "llama", "architectures": ["LlamaForCausalLM"], "vocab_size": 128256, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3072, "num_attention_heads": 24}}, {"name": "meta-llama/Llama-3.2-3B-Instruct", "metadata": {"task": "text-generation", "id2label": {"0": "LABEL_0", "1": "LABEL_1"}, "model_type": "llama", "architectures": ["LlamaForCausalLM"], "vocab_size": 128256, "type_vocab_size": null, "is_decoder": false, "is_encoder_decoder": false, "num_layers": 28, "hidden_size": 3072, "num_attention_heads": 24}}]
+[
+    {
+        "name": "google-t5/t5-small",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 6,
+            "hidden_size": 512,
+            "num_attention_heads": 8
+        }
+    },
+    {
+        "name": "google-t5/t5-base",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 12,
+            "hidden_size": 768,
+            "num_attention_heads": 12
+        }
+    },
+    {
+        "name": "google-t5/t5-large",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 1024,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "google-t5/t5-3b",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5WithLMHeadModel"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 1024,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "google-t5/t5-11b",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5WithLMHeadModel"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 1024,
+            "num_attention_heads": 128
+        }
+    },
+    {
+        "name": "google/flan-t5-base",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 12,
+            "hidden_size": 768,
+            "num_attention_heads": 12
+        }
+    },
+    {
+        "name": "google/flan-t5-large",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 1024,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "google/flan-t5-xxl",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 4096,
+            "num_attention_heads": 64
+        }
+    },
+    {
+        "name": "google/flan-t5-xl",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "t5",
+            "architectures": [
+                "T5ForConditionalGeneration"
+            ],
+            "vocab_size": 32128,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 24,
+            "hidden_size": 2048,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "facebook/bart-base",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1",
+                "2": "LABEL_2"
+            },
+            "model_type": "bart",
+            "architectures": [
+                "BartModel"
+            ],
+            "vocab_size": 50265,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 6,
+            "hidden_size": 768,
+            "num_attention_heads": 12
+        }
+    },
+    {
+        "name": "facebook/bart-large",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1",
+                "2": "LABEL_2"
+            },
+            "model_type": "bart",
+            "architectures": [
+                "BartModel"
+            ],
+            "vocab_size": 50265,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": true,
+            "num_layers": 12,
+            "hidden_size": 1024,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "google/gemma-3-4b-it-qat-q4_0-gguf",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gemma",
+            "architectures": null,
+            "vocab_size": 256000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3072,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "google/gemma-3-12b-it-qat-q4_0-gguf",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gemma",
+            "architectures": null,
+            "vocab_size": 256000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3072,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "google/gemma-3-27b-it-qat-q4_0-gguf",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gemma",
+            "architectures": null,
+            "vocab_size": 256000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3072,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "deepseek-ai/DeepSeek-V2-Lite",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "deepseek_v2",
+            "architectures": [
+                "DeepseekV2ForCausalLM"
+            ],
+            "vocab_size": 102400,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 27,
+            "hidden_size": 2048,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "qwen2",
+            "architectures": [
+                "Qwen2ForCausalLM"
+            ],
+            "vocab_size": 151936,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 1536,
+            "num_attention_heads": 12
+        }
+    },
+    {
+        "name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "qwen2",
+            "architectures": [
+                "Qwen2ForCausalLM"
+            ],
+            "vocab_size": 152064,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3584,
+            "num_attention_heads": 28
+        }
+    },
+    {
+        "name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "qwen2",
+            "architectures": [
+                "Qwen2ForCausalLM"
+            ],
+            "vocab_size": 152064,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 48,
+            "hidden_size": 5120,
+            "num_attention_heads": 40
+        }
+    },
+    {
+        "name": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "llama",
+            "architectures": [
+                "LlamaForCausalLM"
+            ],
+            "vocab_size": 128256,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "gpt2",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gpt2",
+            "architectures": [
+                "GPT2LMHeadModel"
+            ],
+            "vocab_size": 50257,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 12,
+            "hidden_size": 768,
+            "num_attention_heads": 12
+        }
+    },
+    {
+        "name": "gpt2-medium",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gpt2",
+            "architectures": [
+                "GPT2LMHeadModel"
+            ],
+            "vocab_size": 50257,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 24,
+            "hidden_size": 1024,
+            "num_attention_heads": 16
+        }
+    },
+    {
+        "name": "gpt2-large",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gpt2",
+            "architectures": [
+                "GPT2LMHeadModel"
+            ],
+            "vocab_size": 50257,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 36,
+            "hidden_size": 1280,
+            "num_attention_heads": 20
+        }
+    },
+    {
+        "name": "gpt2-xl",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "gpt2",
+            "architectures": [
+                "GPT2LMHeadModel"
+            ],
+            "vocab_size": 50257,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 48,
+            "hidden_size": 1600,
+            "num_attention_heads": 25
+        }
+    },
+    {
+        "name": "microsoft/Phi-3.5-mini-instruct",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "phi3",
+            "architectures": [
+                "Phi3ForCausalLM"
+            ],
+            "vocab_size": 32064,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 3072,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "microsoft/Phi-4-mini-instruct",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "phi3",
+            "architectures": [
+                "Phi3ForCausalLM"
+            ],
+            "vocab_size": 200064,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 3072,
+            "num_attention_heads": 24
+        }
+    },
+    {
+        "name": "microsoft/Phi-4",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "phi3",
+            "architectures": [
+                "Phi3ForCausalLM"
+            ],
+            "vocab_size": 100352,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 40,
+            "hidden_size": 5120,
+            "num_attention_heads": 40
+        }
+    },
+    {
+        "name": "microsoft/Phi-4-reasoning",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "phi3",
+            "architectures": [
+                "Phi3ForCausalLM"
+            ],
+            "vocab_size": 100352,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 40,
+            "hidden_size": 5120,
+            "num_attention_heads": 40
+        }
+    },
+    {
+        "name": "microsoft/Phi-3-medium-4k-instruct",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "phi3",
+            "architectures": [
+                "Phi3ForCausalLM"
+            ],
+            "vocab_size": 32064,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 40,
+            "hidden_size": 5120,
+            "num_attention_heads": 40
+        }
+    },
+    {
+        "name": "mistralai/Mistral-Nemo-Instruct-FP8-2407",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "mistral",
+            "architectures": null,
+            "vocab_size": 32000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "mixtral",
+            "architectures": [
+                "MixtralForCausalLM"
+            ],
+            "vocab_size": 32000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "mistralai/Mistral-7B-v0.1",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "mistral",
+            "architectures": [
+                "MistralForCausalLM"
+            ],
+            "vocab_size": 32000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "mistralai/Mistral-7B-Instruct-v0.2",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "mistral",
+            "architectures": [
+                "MistralForCausalLM"
+            ],
+            "vocab_size": 32000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "mistralai/Mistral-7B-Instruct-v0.1",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "mistral",
+            "architectures": [
+                "MistralForCausalLM"
+            ],
+            "vocab_size": 32000,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 32,
+            "hidden_size": 4096,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "meta-llama/Llama-3.2-1B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "llama",
+            "architectures": [
+                "LlamaForCausalLM"
+            ],
+            "vocab_size": 128256,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 16,
+            "hidden_size": 2048,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "meta-llama/Llama-3.2-1B-Instruct",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "llama",
+            "architectures": [
+                "LlamaForCausalLM"
+            ],
+            "vocab_size": 128256,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 16,
+            "hidden_size": 2048,
+            "num_attention_heads": 32
+        }
+    },
+    {
+        "name": "meta-llama/Llama-3.2-3B",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "llama",
+            "architectures": [
+                "LlamaForCausalLM"
+            ],
+            "vocab_size": 128256,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3072,
+            "num_attention_heads": 24
+        }
+    },
+    {
+        "name": "meta-llama/Llama-3.2-3B-Instruct",
+        "metadata": {
+            "task": "text-generation",
+            "id2label": {
+                "0": "LABEL_0",
+                "1": "LABEL_1"
+            },
+            "model_type": "llama",
+            "architectures": [
+                "LlamaForCausalLM"
+            ],
+            "vocab_size": 128256,
+            "type_vocab_size": null,
+            "is_decoder": false,
+            "is_encoder_decoder": false,
+            "num_layers": 28,
+            "hidden_size": 3072,
+            "num_attention_heads": 24
+        }
+    }
+]

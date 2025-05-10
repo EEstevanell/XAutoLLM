@@ -9,14 +9,22 @@ from autogoal.meta_learning.distance import (
 from autogoal.meta_learning.feature_extraction.generative_task import (
     GenerativeTaskFeatureExtractor,
 )
-from autogoal.datasets import squad, cnn_dailymail
+from autogoal.datasets import squad, cnn_dailymail, drop
 from autogoal.meta_learning.warm_start import WarmStart
 from autogoal.meta_learning.normalization import LogNormalizer, MinMaxNormalizer
 from autogoal.ml import AutoML, evaluation_time
 from autogoal.kb import Seq, Supervised, Prompt, GeneratedText
 from autogoal_transformers._generated import (
     TEXT_GEN_Gpt2,
+    TEXT_GEN_Meta_Llama_Llama_32_1B,
+    TEXT_GEN_Microsoft_Phi_4_Mini_Instruct,
+    TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
+    TEXT_GEN_Mistralai_Mistral_7B_V01,
+    TEXT_GEN_Facebook_Bart_Base,
+    TEXT_GEN_Deepseek_Ai_Deepseek_R1_Distill_Qwen_7B,
+    TEXT_GEN_Google_T5_T5_Small
 )
+
 from autogoal.search import JsonLogger, ConsoleLogger
 from autogoal_transformers._manual import (
     FineTuneGenLLMTask,
@@ -29,126 +37,6 @@ from autogoal.meta_learning._logging import ExperienceLogger
 import logging
 import nltk
 import numpy as np
-
-def _format_squad_inputs(
-    reference_texts: List[str], prediction_texts: List[str]
-) -> Dict[str, List[Dict]]:
-    """
-    Formats lists of prediction and reference texts into the dictionary
-    structure required by the Hugging Face SQuAD evaluate metric.
-
-    Args:
-        prediction_texts: A list of predicted answer strings.
-        reference_texts: A list of corresponding ground-truth answer strings.
-
-    Returns:
-        A dictionary containing formatted 'predictions' and 'references' lists.
-
-    Raises:
-        ValueError: If the input lists have different lengths.
-    """
-    if len(prediction_texts) != len(reference_texts):
-        raise ValueError("Prediction and reference lists must have the same length.")
-
-    formatted_predictions = []
-    formatted_references = []
-
-    for i, (pred_text, ref_text) in enumerate(zip(prediction_texts, reference_texts)):
-        # Generate a unique ID based on the index
-        q_id = str(i)
-
-        # Format prediction
-        formatted_predictions.append(
-            {"prediction_text": str(pred_text), "id": q_id}  # Ensure it's a string
-        )
-
-        # Format reference
-        # The 'text' field must be a list of strings, even if there's only one answer [2, 3].
-        formatted_references.append(
-            {
-                "answers": {
-                    "text": [str(ref_text)],  # Ensure it's a string and wrap in a list
-                    "answer_start": [],  # answer_start is often required but can be empty if only text is used
-                },
-                "id": q_id,
-            }
-        )
-
-    return {"predictions": formatted_predictions, "references": formatted_references}
-
-def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str], *args, **kwargs) -> float:
-    """
-    Computes the official SQuAD F1 score given lists of prediction and reference texts.
-
-    Args:
-        prediction_texts: A list of predicted answer strings.
-        reference_texts: A list of corresponding ground-truth answer strings.
-
-    Returns:
-        float: The average F1 score (0-100). Returns -1.0 if metric loading failed.
-    """
-    from evaluate import load
-
-    squad_metric = load("squad")
-
-    if squad_metric is None:
-        print("SQuAD metric not loaded. Cannot compute F1 score.")
-        return -1.0  # Indicate error
-
-    try:
-        formatted_data = _format_squad_inputs(prediction_texts, reference_texts)
-        results = squad_metric.compute(
-            predictions=formatted_data["predictions"],
-            references=formatted_data["references"],
-        )
-        # The metric returns scores out of 100 [2, 3]
-        print(f"F1 Score: {results['f1']}")
-        # Return the F1 score
-        return results["f1"]
-    except ValueError as ve:
-        print(f"Input Error: {ve}")
-        return -1.0
-    except Exception as e:
-        print(f"Error during F1 computation: {e}")
-        return -1.0
-
-def compute_squad_exact_match(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the official SQuAD Exact Match (EM) score given lists of prediction and reference texts.
-
-    Args:
-        prediction_texts: A list of predicted answer strings.
-        reference_texts: A list of corresponding ground-truth answer strings.
-
-    Returns:
-        float: The average Exact Match score (0-100). Returns -1.0 if metric loading failed.
-    """
-    from evaluate import load
-
-    squad_metric = load("squad")
-
-    if squad_metric is None:
-        print("SQuAD metric not loaded. Cannot compute Exact Match score.")
-        return -1.0  # Indicate error
-
-    try:
-        formatted_data = _format_squad_inputs(prediction_texts, reference_texts)
-        results = squad_metric.compute(
-            predictions=formatted_data["predictions"],
-            references=formatted_data["references"],
-        )
-        # The metric returns scores out of 100 [2, 3]
-        print(f"Exact Match Score: {results['exact_match']}")
-        # Return the Exact Match score
-        return results["exact_match"]
-    except ValueError as ve:
-        print(f"Input Error: {ve}")
-        return -1.0
-    except Exception as e:
-        print(f"Error during Exact Match computation: {e}")
-        return -1.0
 
 def _compute_rouge_scores(reference_texts: List[str], prediction_texts: List[str]) -> Dict[str, float]:
     """
@@ -384,7 +272,7 @@ def main():
         logger.info("CUDA not available. Using CPU.")
 
     # Load dataset
-    X_train, y_train, X_test, y_test = cnn_dailymail.load(True)
+    X_train, y_train, X_test, y_test = drop.load(True)
     X_train = X_train  # Limit to 1000 samples for testing
     y_train = y_train  # Limit to 1000 samples for testing
     X_test = X_test  # Limit to 1000 samples for testing
@@ -402,10 +290,17 @@ def main():
         [
             # FineTuneGenLLMTask,
             PartialFineTuneGenLLMTask, 
-            LoraGenLLMTask,
+            # LoraGenLLMTask,
             TEXT_GEN_Gpt2,
+            # TEXT_GEN_Meta_Llama_Llama_32_1B,
+            # TEXT_GEN_Microsoft_Phi_4_Mini_Instruct,
+            # TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
+            # TEXT_GEN_Mistralai_Mistral_7B_V01,
+            # TEXT_GEN_Facebook_Bart_Base,
+            # TEXT_GEN_Deepseek_Ai_Deepseek_R1_Distill_Qwen_7B,
+            # TEXT_GEN_Google_T5_T5_Small
         ]
-        # + find_classes(include="TEXT_GEN")
+        # + find_classes(include="TEXT_GEN", exclude="T5")
     )
 
     output_dir = Path(OUTPUT_DIR)

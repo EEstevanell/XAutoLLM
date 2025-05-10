@@ -58,7 +58,6 @@ def _deserialize_task_features(loaded_features: Dict[str, Optional[List[float]]]
             deserialized[key] = np.array(value, dtype=float) if isinstance(value, (list, tuple)) else value
     return deserialized
 
-
 # Configure logging properly
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -172,182 +171,6 @@ def compute_squad_f1(
         print(f"Error during F1 computation: {e}")
         return -1.0
 
-
-def compute_squad_exact_match(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the official SQuAD Exact Match (EM) score given lists of prediction and reference texts.
-
-    Args:
-        prediction_texts: A list of predicted answer strings.
-        reference_texts: A list of corresponding ground-truth answer strings.
-
-    Returns:
-        float: The average Exact Match score (0-100). Returns -1.0 if metric loading failed.
-    """
-    from evaluate import load
-
-    squad_metric = load("squad")
-
-    if squad_metric is None:
-        print("SQuAD metric not loaded. Cannot compute Exact Match score.")
-        return -1.0  # Indicate error
-
-    try:
-        formatted_data = _format_squad_inputs(prediction_texts, reference_texts)
-        results = squad_metric.compute(
-            predictions=formatted_data["predictions"],
-            references=formatted_data["references"],
-        )
-        # The metric returns scores out of 100 [2, 3]
-        print(f"Exact Match Score: {results['exact_match']}")
-        # Return the Exact Match score
-        return results["exact_match"]
-    except ValueError as ve:
-        print(f"Input Error: {ve}")
-        return -1.0
-    except Exception as e:
-        print(f"Error during Exact Match computation: {e}")
-        return -1.0
-
-
-def _compute_rouge_scores(
-    reference_texts: List[str], prediction_texts: List[str]
-) -> Dict[str, float]:
-    """
-    Helper function to compute all ROUGE scores using the Hugging Face evaluate library.
-
-    Args:
-        reference_texts: A list of reference summary strings.
-        prediction_texts: A list of corresponding predicted summary strings.
-
-    Returns:
-        A dictionary containing ROUGE scores (e.g., rouge1, rouge2, rougeL, rougeLsum).
-        Returns an empty dictionary if metric loading or computation fails.
-    """
-    if len(prediction_texts) != len(reference_texts):
-        logger.error("Prediction and reference lists must have the same length.")
-        raise ValueError("Prediction and reference lists must have the same length.")
-
-    # Handle empty lists: ROUGE scores are not well-defined or are zero.
-    if len(prediction_texts) == 0 or len(reference_texts) == 0:
-        logger.error(
-            "ROUGE computation: One or both input lists (predictions, references) are empty. Returning empty scores."
-        )
-        return {}
-
-    try:
-        from evaluate import load
-
-        rouge_metric = load("rouge")
-    except Exception as e:
-        logger.error(f"Failed to load ROUGE metric from Hugging Face evaluate: {e}")
-        return {}
-
-    if rouge_metric is None:
-        logger.error("ROUGE metric not loaded successfully.")
-        return {}
-
-    try:
-        results = rouge_metric.compute(
-            predictions=prediction_texts,
-            references=reference_texts,
-            # Optional: use_stemmer=True can be added for Porter stemmer application
-        )
-        # The results are typically like:
-        # {'rouge1': 0.45, 'rouge2': 0.25, 'rougeL': 0.40, 'rougeLsum': 0.42}
-        # These are F-measure scores by default for rouge1, rouge2, rougeL.
-        # For rougeLsum, it's also an F-measure.
-        return results
-    except ValueError as ve:
-        logger.error(f"Input error during ROUGE computation: {ve}")
-        return {}
-    except Exception as e:
-        logger.error(f"Error during ROUGE computation: {e}")
-        return {}
-
-
-def compute_rouge1(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the ROUGE-1 score.
-
-    Args:
-        reference_texts: A list of reference summary strings.
-        prediction_texts: A list of corresponding predicted summary strings.
-
-    Returns:
-        float: The ROUGE-1 score (0-1). Returns -1.0 on error.
-    """
-    results = _compute_rouge_scores(reference_texts, prediction_texts)
-    if results and "rouge1" in results:
-        logger.info(f"ROUGE-1 Score: {results['rouge1']}")
-        return results["rouge1"]
-    return -1.0
-
-
-def compute_rouge2(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the ROUGE-2 score.
-
-    Args:
-        reference_texts: A list of reference summary strings.
-        prediction_texts: A list of corresponding predicted summary strings.
-
-    Returns:
-        float: The ROUGE-2 score (0-1). Returns -1.0 on error.
-    """
-    results = _compute_rouge_scores(reference_texts, prediction_texts)
-    if results and "rouge2" in results:
-        logger.info(f"ROUGE-2 Score: {results['rouge2']}")
-        return results["rouge2"]
-    return -1.0
-
-
-def compute_rougeL(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the ROUGE-L score (Longest Common Subsequence at sentence level).
-
-    Args:
-        reference_texts: A list of reference summary strings.
-        prediction_texts: A list of corresponding predicted summary strings.
-
-    Returns:
-        float: The ROUGE-L score (0-1). Returns -1.0 on error.
-    """
-    results = _compute_rouge_scores(reference_texts, prediction_texts)
-    if results and "rougeL" in results:
-        logger.info(f"ROUGE-L Score: {results['rougeL']}")
-        return results["rougeL"]
-    return -1.0
-
-
-def compute_rougeLsum(
-    reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
-) -> float:
-    """
-    Computes the ROUGE-Lsum score (Longest Common Subsequence at summary level).
-
-    Args:
-        reference_texts: A list of reference summary strings.
-        prediction_texts: A list of corresponding predicted summary strings.
-
-    Returns:
-        float: The ROUGE-Lsum score (0-1). Returns -1.0 on error.
-    """
-    results = _compute_rouge_scores(reference_texts, prediction_texts)
-    if results and "rougeLsum" in results:
-        logger.info(f"ROUGE-Lsum Score: {results['rougeLsum']}")
-        return results["rougeLsum"]
-    return -1.0
-
-
 class CudaNotFoundError(Exception):
     """Exception raised when no CUDA devices are found but are required."""
 
@@ -410,29 +233,22 @@ class ExperimentExecutor:
             List of experiment configurations
         """
         logger.info("Loading multi-objective experiment configurations")
+
+        # Import the correct metrics from the respective dataset scripts
+        from autogoal.datasets import squad, drop
+        # Assume squad.py and drop.py each define compute_f1 and compute_exact_match
+        # If not, adjust the import names accordingly
+        squad_f1 = squad.compute_squad_f1
+        squad_exact_match = squad.compute_squad_exact_match
+        drop_f1 = drop.compute_f1
+        drop_exact_match = drop.compute_drop_exact_match
+
+        if squad_f1 is None or squad_exact_match is None:
+            raise ImportError("squad.py must define compute_f1 and compute_exact_match")
+        if drop_f1 is None or drop_exact_match is None:
+            raise ImportError("drop.py must define compute_f1 and compute_exact_match")
+
         return [
-            {
-                "dataset": "cnn_dailymail",
-                "experiment_id": "cnn_dailymail",
-                "is_baseline": True,
-                "objectives": [
-                    {
-                        "name": "rouge-L",
-                        "metric": compute_rougeL,
-                        "maximize": True,
-                    },
-                    {
-                        "name": "evaluation_time",
-                        "metric": evaluation_time,
-                        "maximize": False,
-                    },
-                ],
-                "observations": [("rouge-L", compute_rougeL)],
-                "config": {
-                    "k_pos": 0,
-                    "k_neg": 0,
-                },
-            },
             {
                 "dataset": "squad",
                 "experiment_id": "squad",
@@ -440,7 +256,7 @@ class ExperimentExecutor:
                 "objectives": [
                     {
                         "name": "f1",
-                        "metric": compute_squad_f1,
+                        "metric": squad_f1,
                         "maximize": True,
                     },
                     {
@@ -449,13 +265,36 @@ class ExperimentExecutor:
                         "maximize": False,
                     },
                 ],
-                "observations": [("rouge-L", compute_rougeL)],
+                "observations": [("exact_match", squad_exact_match)],
+                "config": {
+                    "k_pos": 0,
+                    "k_neg": 0,
+                },
+            },
+            {
+                "dataset": "drop",
+                "experiment_id": "drop",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": drop_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("exact_match", drop_exact_match)],
                 "config": {
                     "k_pos": 0,
                     "k_neg": 0,
                 },
             },
         ]
+
 
     @staticmethod
     def execute_experiment(
@@ -476,9 +315,13 @@ class ExperimentExecutor:
             cpu_cores: List of CPU core IDs to use
             log_file_path: Path to the log file for this experiment
         """
-        # Import necessary modules inside process
         import os
+        # --- CRITICAL: Set CUDA_VISIBLE_DEVICES before any torch import ---
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
         import sys
+        # Now safe to import torch and all other modules
         from autogoal.meta_learning.distance import (
             CosineDistance,
             EuclideanDistance,
@@ -512,8 +355,17 @@ class ExperimentExecutor:
         from autogoal.utils import Hour, Gb
         from autogoal.search._warm_start_pge import NSPEWarmStartSearch, NSPESearch
         from autogoal.meta_learning._logging import ExperienceLogger
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        
+
+        # Optionally, log the visible CUDA device for debugging
+        try:
+            import torch
+            visible_devices = torch.cuda.device_count()
+            current_device = torch.cuda.current_device() if visible_devices > 0 else None
+            device_name = torch.cuda.get_device_name(current_device) if visible_devices > 0 else None
+            print(f"[PID {os.getpid()}] CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}, torch sees {visible_devices} device(s), current device: {current_device}, name: {device_name}")
+        except Exception as e:
+            print(f"[PID {os.getpid()}] Could not log CUDA device info: {e}")
+
         dataset_dict = {
             "cnn_dailymail": cnn_dailymail,
             "squad": squad,

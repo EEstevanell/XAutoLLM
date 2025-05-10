@@ -685,7 +685,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -866,7 +866,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1148,7 +1148,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1390,7 +1390,7 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1438,7 +1438,7 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1492,7 +1492,7 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1546,7 +1546,7 @@ class FineTunerGenBase(AlgorithmBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
@@ -1847,8 +1847,8 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
     def __init__(
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
-        num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
-        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        num_trainable_layers: CategoricalValue(1, 2),#, 4, 8, 16, 32, 64),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64),#, 128, 256),  # type: ignore
         max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
@@ -1862,7 +1862,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1964,7 +1964,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2055,7 +2055,7 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("3/4"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
