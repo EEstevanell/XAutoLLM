@@ -1,4 +1,5 @@
 import json
+import warnings
 from transformers import AutoModel, AutoTokenizer, AutoConfig
 from huggingface_hub import HfApi
 import re
@@ -218,6 +219,20 @@ def convert_string_to_number(s):
     else:
         return float(s)
 
+def safe_model_from_pretrained(cls, model_name_or_path, **kwargs):
+    """
+    Utility to load HuggingFace models with attn_implementation="eager" if supported.
+    Falls back gracefully if not supported (for compatibility with all models).
+    """
+    try:
+        return cls.from_pretrained(model_name_or_path, attn_implementation="eager", **kwargs)
+    except TypeError as e:
+        # attn_implementation not supported
+        return cls.from_pretrained(model_name_or_path, **kwargs)
+    except Exception as e:
+        warnings.warn(f"Could not set attn_implementation='eager': {e}. Proceeding without it.")
+        return cls.from_pretrained(model_name_or_path, **kwargs)
+    
 class SimpleTextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_length):
         self.texts = texts

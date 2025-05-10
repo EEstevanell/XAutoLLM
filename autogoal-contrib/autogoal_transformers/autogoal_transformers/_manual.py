@@ -1,3 +1,5 @@
+import warnings
+
 from autogoal.kb import (
     Label,
     Seq,
@@ -44,7 +46,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     RobertaForSequenceClassification,
 )
-from autogoal_transformers._utils import SimpleTextDataset, Text2TextDataset
+from autogoal_transformers._utils import SimpleTextDataset, Text2TextDataset, safe_model_from_pretrained
 from peft import get_peft_model, LoraConfig, TaskType
 import os
 
@@ -1578,11 +1580,13 @@ class FineTunerGenBase(AlgorithmBase):
         self.max_new_tokens = None  # Will be set after model/tokenizer is loaded
 
     def init_model(self):
-        """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation."""
+        """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation.
+        Ensures compatibility with all models and suppresses flash-attention warnings by using attn_implementation="eager" if possible.
+        """
         # Avoid reinitialization if already initialized
         if getattr(self, 'model', None) is not None and getattr(self, 'tokenizer', None) is not None:
             return
-        
+
         model_name = self.inner_model.name
         print(f"Initializing generative model: {model_name}")
         assert isinstance(model_name, str), "Model name must be a string"
@@ -1604,13 +1608,13 @@ class FineTunerGenBase(AlgorithmBase):
         try:
             if self.is_encoder_decoder:
                 from transformers import AutoModelForSeq2SeqLM
-                self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                    model_name, config=self.config, trust_remote_code=True
+                self.model = safe_model_from_pretrained(
+                    AutoModelForSeq2SeqLM, model_name, config=self.config, trust_remote_code=True
                 )
             else:
                 from transformers import AutoModelForCausalLM
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, config=self.config, trust_remote_code=True
+                self.model = safe_model_from_pretrained(
+                    AutoModelForCausalLM, model_name, config=self.config, trust_remote_code=True
                 )
         except Exception as e:
             print(f"Error loading generative model for '{model_name}': {e}")
