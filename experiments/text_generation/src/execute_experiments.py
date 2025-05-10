@@ -9,7 +9,6 @@ Usage:
     python execute_experiments.py [--experiment_type single|multi]
 """
 
-import argparse
 import logging
 import os
 import sys
@@ -26,14 +25,6 @@ import requests
 # Set PYTHONPATH for subprocesses (so child processes inherit it)
 import os
 os.environ["PYTHONPATH"] = f"/home/coder/autogoal/experiments:/home/coder/autogoal/experiments/text_classification:" + os.environ.get("PYTHONPATH", "")
-
-# Try importing torch for CUDA device detection
-try:
-    import torch
-
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
 
 # Import the configuration generator
 
@@ -75,26 +66,26 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(handler)
 
-def check_huggingface_connectivity():
-    try:
-        # This endpoint is stable and requires no authentication for a HEAD request
-        response = requests.head("https://huggingface.co/api/models")
-        if response.status_code == 200:
-            logger.info("Hugging Face Model Hub is reachable.")
-            return True
-        else:
-            logger.warning(f"Hugging Face Hub responded with status: {response.status_code}")
-            return False
-    except Exception as e:
-        logger.error(f"Could not reach Hugging Face Model Hub: {e}")
-        return False
+# def check_huggingface_connectivity():
+#     try:
+#         # This endpoint is stable and requires no authentication for a HEAD request
+#         response = requests.head("https://huggingface.co/api/models")
+#         if response.status_code == 200:
+#             logger.info("Hugging Face Model Hub is reachable.")
+#             return True
+#         else:
+#             logger.warning(f"Hugging Face Hub responded with status: {response.status_code}")
+#             return False
+#     except Exception as e:
+#         logger.error(f"Could not reach Hugging Face Model Hub: {e}")
+#         return False
 
-if not check_huggingface_connectivity():
-    logger.error("No connection to Hugging Face – skipping downloads or exiting")
-    sys.exit(0)
+# if not check_huggingface_connectivity():
+#     logger.error("No connection to Hugging Face – skipping downloads or exiting")
+#     sys.exit(0)
 
 
-FEATURE_CACHE_JSON_PATH = "/home/coder/autogoal/experiments/text_generation/src/execute_experiments.py"
+FEATURE_CACHE_JSON_PATH = Path("/home/coder/autogoal/experiments/text_generation/src/task_features_cache")
 
 def _format_squad_inputs(
     reference_texts: List[str], prediction_texts: List[str]
@@ -397,10 +388,7 @@ class ExperimentExecutor:
         Raises:
             CudaNotFoundError: If no CUDA devices are available
         """
-        if not TORCH_AVAILABLE:
-            raise CudaNotFoundError(
-                "PyTorch not available. Cannot detect CUDA devices."
-            )
+        import torch
 
         device_count = torch.cuda.device_count()
         if device_count == 0:
@@ -518,6 +506,9 @@ class ExperimentExecutor:
             LoraGenLLMTask,
             PartialFineTuneGenLLMTask,
         )
+        from autogoal_transformers._generated import (
+            TEXT_GEN_Meta_Llama_Llama_32_1B
+        )
         from autogoal.utils import Hour, Gb
         from autogoal.search._warm_start_pge import NSPEWarmStartSearch, NSPESearch
         from autogoal.meta_learning._logging import ExperienceLogger
@@ -579,9 +570,6 @@ class ExperimentExecutor:
         file_logger.info(f"  CPU cores: {cpu_cores}")
         file_logger.info(f"  Thread environment variables set to: {cpu_count} threads")
 
-        from autogoal.utils._process import initialize_cuda_multiprocessing
-        initialize_cuda_multiprocessing()
-
         try:
             # Load the dataset data
             X_train, y_train, X_test, y_test = dataset.load(True)
@@ -613,6 +601,7 @@ class ExperimentExecutor:
                 with open(feature_cache_json_path, "r") as f:  # Use CNN_DAILYMAIL_JSON_PATH
                     loaded_f = json.load(f)
                     current_task_features = _deserialize_task_features(loaded_f) # Deserialize here
+                    logger.info(f"Cache file {feature_cache_json_path} found. Will use cached features.")
             except FileNotFoundError:  # Be more specific with the exception
                 logger.info(f"Cache file {feature_cache_json_path} not found. Will compute features.")
             except Exception as e:  # Catch other potential errors
@@ -634,7 +623,7 @@ class ExperimentExecutor:
                 logger.info(f"Successfully cached features to {feature_cache_json_path}")
             except Exception as e:
                 logger.error(f"Error caching features to {feature_cache_json_path}: {e}")
-
+        
             objectives = experiment_data["objectives"]
             if objectives is None:
                 raise ValueError("Objectives cannot be None")
@@ -809,6 +798,9 @@ def main():
     try:
         # Initialize experiment executor
         executor = ExperimentExecutor()
+        
+        from autogoal.utils._process import initialize_cuda_multiprocessing
+        initialize_cuda_multiprocessing()
 
         # Execute all experiments
         start_time = time.time()
