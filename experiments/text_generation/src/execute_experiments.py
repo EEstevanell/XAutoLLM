@@ -661,7 +661,7 @@ class ExperimentExecutor:
             # Initialize loggers
             loggers = [
                 ConsoleLogger(),
-                JsonLogger(f"titan-{dataset_name}-warm-start-id:{id}.json"),
+                JsonLogger(f"titan-{dataset_name}.json"),
                 ExperienceLogger(
                     dataset_features=warm_start.current_task_features,
                     system_features=warm_start.current_system_features,
