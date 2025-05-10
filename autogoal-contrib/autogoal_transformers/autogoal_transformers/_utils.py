@@ -91,9 +91,6 @@ TASK_TO_BASE_MODELS = {
 
         ## DECODER-ONLY
         # gemma
-        "google/gemma-3-4b-it-qat-q4_0-gguf",
-        "google/gemma-3-12b-it-qat-q4_0-gguf",
-        "google/gemma-3-27b-it-qat-q4_0-gguf",
         "google/gemma-3-4b-it",
         "google/gemma-3-4b-pt",
         "google/gemma-3-12b-it",

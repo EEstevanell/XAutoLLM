@@ -43,6 +43,7 @@ class SearchAlgorithm:
         allow_duplicates=True,
         logger=None,
         ranking_fn=None,
+        **kwargs
     ):
         if generator_fn is None and fitness_fn is None:
             raise ValueError("You must provide either `generator_fn` or `fitness_fn`")
