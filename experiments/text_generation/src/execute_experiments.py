@@ -487,7 +487,7 @@ class ExperimentExecutor:
                 FineTuneGenLLMTask,
                 LoraGenLLMTask,
                 PartialFineTuneGenLLMTask,
-            ] + find_classes(include="TEXT_GEN")
+            ] + find_classes(include="TEXT_GEN", exclude="T5")
 
             model = AutoML(
                 input=(Seq[Prompt], Supervised[Seq[GeneratedText]]),
