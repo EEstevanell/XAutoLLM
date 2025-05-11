@@ -673,7 +673,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         self,
         inner_model: algorithm(*[Word, VectorContinuous], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -854,7 +854,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         inner_model: algorithm(*[Word, VectorContinuous], include=["transformer"]),  # type: ignore
         num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1134,7 +1134,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all", "lora_only"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1378,7 +1378,7 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1427,7 +1427,7 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1480,7 +1480,7 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1540,7 +1540,7 @@ class FineTunerGenBase(AlgorithmBase):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1671,14 +1671,12 @@ class FineTunerGenBase(AlgorithmBase):
             if self.verbose:
                 print("[WARN] Could not determine model context window from config or tokenizer. Using fallback value 1024.")
 
-        # Compute max_new_tokens so that input + output <= context_window
-        # If max_length is too large, ensure at least 1 token can be generated
-        if self.max_length >= context_window:
-            self.max_new_tokens = 1
-        else:
-            self.max_new_tokens = context_window - self.max_length
-        if self.verbose:
-            print(f"[INFO] Model context window: {context_window}, max_length: {self.max_length}, computed max_new_tokens: {self.max_new_tokens}")
+        # Now, cap self.max_length at context_window [1]
+        if self.max_length > context_window:
+            self.max_length = context_window
+            
+        # Ensure max_length is at least 1, as some logic might depend on it being positive.
+        self.max_length = max(1, self.max_length)
 
     def _create_dataset(self, X, y):
         return Text2TextDataset(X, y, self.tokenizer, self.max_length)
@@ -1726,8 +1724,8 @@ class FineTunerGenBase(AlgorithmBase):
             return max(1, min(16, os.cpu_count()))
         else:
             return 0
-
-    def finetune(self, X, y):
+        
+    def _downsize_data(self, X, y):
         # Downsize data if requested
         import numpy as np
         from sklearn.model_selection import train_test_split
@@ -1745,11 +1743,60 @@ class FineTunerGenBase(AlgorithmBase):
                     X, _, y, _ = train_test_split(X, y, train_size=frac, random_state=42, shuffle=True)
                 except Exception as e:
                     print(f"[WARN] Data downsize failed, proceeding with full data. Error: {e}")
-                    
+        return X, y
+    
+    def _compute_max_new_tokens(self, X, y, logger):
+        if len(y) == 0 or self.tokenizer is None:
+            raise ValueError("Target answers 'y' are empty or tokenizer not available. Cannot calculate max_new_tokens.")
+        
+        try:
+            # Tokenize each answer string in y to find its length.
+            # self.tokenizer.encode usually includes special tokens, which is fine for length estimation.
+            valid_answer_strings = [str(ans_str) for ans_str in y if ans_str is not None and str(ans_str).strip() != ""]
+            batch_encoding = self.tokenizer(
+                valid_answer_strings, 
+                add_special_tokens=True, # Consistent with default encode behavior
+                padding=False,           # Do not pad, we need individual lengths
+                truncation=False         # Do not truncate, we need actual lengths
+            )
+            
+            answer_token_lengths = [len(ids) for ids in batch_encoding['input_ids']]
+            if answer_token_lengths:
+                # Using percentile (e.g., P95) is more robust to outliers than absolute max.
+                # For simplicity here, we use max as per the request, but P95 is recommended.
+                # max_ans_len_tokens = np.max(answer_token_lengths)
+                p95_ans_len_tokens = np.percentile(answer_token_lengths, 95) # More robust
+                
+                # Apply heuristic: P95_y_len * 1.5, plus a small buffer (e.g., 10-20 tokens)
+                # The buffer helps accommodate EOS token and slight generation variability.
+                calculated_heuristic_val = int(p95_ans_len_tokens * 1.5) + 15
+                
+                # Ensure it's at least a minimum sensible value (e.g., 20 tokens)
+                self.max_new_tokens = max(20, calculated_heuristic_val)
+                logger.info(f"Calculated max_new_tokens based on P95 training answer length: {self.max_new_tokens} (P95 ans_len: {p95_ans_len_tokens:.2f})")
+            else:
+                raise ValueError("No valid answer lengths found in 'y' to calculate heuristic_max_new_tokens.")
+            
+        except Exception as e:
+            logger.error(f"Error calculating max_new_tokens: {e}.")
+            raise e
+
+    def finetune(self, X, y):
         import gc
         import torch
         import logging
+        
+        logger = logging.getLogger("autogoal.finetune")
+        logger.setLevel(logging.INFO)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            logger.addHandler(handler)
+            
+        X, y = self._downsize_data(X, y)
         self.init_model()
+        self._compute_max_new_tokens(X, y, logger)
+                    
         self.print_trainable_parameters()
         dataset = self._create_dataset(X, y)
         # Graceful handling of DataLoader worker errors
@@ -1780,12 +1827,6 @@ class FineTunerGenBase(AlgorithmBase):
         scaler = torch.amp.GradScaler() if self.use_mixed_precision and self.device.type == "cuda" else None
         previous_loss = None
         epochs_no_improve = 0
-        logger = logging.getLogger("autogoal.finetune")
-        logger.setLevel(logging.INFO)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
-            logger.addHandler(handler)
 
         epoch_iter = range(self.epochs)
         if self.verbose:
@@ -1896,12 +1937,6 @@ class FineTunerGenBase(AlgorithmBase):
         import torch
         # Prepare dataset and dataloader
         dataset = SimpleTextDataset(X, None, self.tokenizer, self.max_length)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self._get_num_workers(),
-        )
         self.model.eval()
         results = []
         logger = logging.getLogger("autogoal.predict")
@@ -1910,41 +1945,46 @@ class FineTunerGenBase(AlgorithmBase):
             handler = logging.StreamHandler()
             handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
             logger.addHandler(handler)
+            
         # Best practices for prediction: pin_memory, non_blocking, autocast, error handling, and logging
         use_amp = self.use_mixed_precision and self.device.type == "cuda"
-        pin_memory = self.device.type == "cuda"
-        # Re-create dataloader with pin_memory if needed
-        if getattr(dataloader, 'pin_memory', False) != pin_memory:
+        pin_memory_flag = (self.device.type == "cuda")
+        num_workers=self._get_num_workers()
+        try:
             dataloader = DataLoader(
                 dataset,
                 batch_size=self.batch_size,
                 shuffle=False,
-                num_workers=self._get_num_workers(),
-                pin_memory=pin_memory,
+                num_workers=num_workers,
+                pin_memory=pin_memory_flag,
+                prefetch_factor= 2 if num_workers > 0 else None, # From your finetune method
+                persistent_workers=(num_workers > 0)     # From your finetune method
+            )
+        except (RuntimeError, OSError, NotImplementedError) as e:
+            logger.warning(f"DataLoader worker error in predict ({e}), falling back to num_workers=0.")
+            dataloader = DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=0,
+                pin_memory=pin_memory_flag
             )
         batch_iter = tqdm(dataloader, total=len(dataloader), desc="Predicting", unit="batch", leave=True, disable=not self.verbose)
         with torch.no_grad():
             for step, batch in enumerate(batch_iter):
                 try:
                     # Use non_blocking transfer for CUDA, and ensure all tensors are on the correct device
-                    inputs = {k: v.to(self.device, non_blocking=pin_memory) for k, v in batch.items() if k != 'labels'}
+                    inputs = {k: v.to(self.device, non_blocking=pin_memory_flag) for k, v in batch.items() if k != 'labels'}
                     input_ids = inputs.get('input_ids')
                     # Set a hard cap for max_new_tokens for safety
-                    max_new_tokens = min(self.max_new_tokens or 32, 128)
+                    max_new_tokens = self.max_new_tokens
                     eos_token_id = self.tokenizer.eos_token_id
+                    if eos_token_id is None and self.tokenizer.pad_token_id is not None:
+                        logger.warning("eos_token_id is None. Using pad_token_id as eos_token_id for generation.")
+                        eos_token_id = self.tokenizer.pad_token_id
+                            
                     logger.info(f"Batch {step+1}: input_ids shape={input_ids.shape}, max_new_tokens={max_new_tokens}")
-                    if use_amp:
-                        with torch.amp.autocast(device_type=self.device.type):
-                            output_ids = self.model.generate(
-                                input_ids=input_ids,
-                                attention_mask=inputs.get('attention_mask'),
-                                max_new_tokens=max_new_tokens,
-                                num_beams=1,
-                                do_sample=False,
-                                pad_token_id=self.tokenizer.pad_token_id,
-                                eos_token_id=eos_token_id,
-                            )
-                    else:
+                    with torch.amp.autocast(device_type=self.device.type, enabled=use_amp):
                         output_ids = self.model.generate(
                             input_ids=input_ids,
                             attention_mask=inputs.get('attention_mask'),
@@ -1954,14 +1994,26 @@ class FineTunerGenBase(AlgorithmBase):
                             pad_token_id=self.tokenizer.pad_token_id,
                             eos_token_id=eos_token_id,
                         )
-                    decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-                    results.extend(decoded)
+                    # --- Decode only the generated part for Causal LMs ---
+                    # The input_ids are part of the output_ids for causal LMs.
+                    # We need to slice the output_ids to get only the generated tokens.
+                    num_input_tokens = input_ids.shape[1]
+                    
+                    if output_ids.shape[1] > num_input_tokens:
+                        generated_ids_only = output_ids[:, num_input_tokens:]
+                    else: 
+                        # No new tokens generated, or output is shorter than input (should not happen with proper generate call)
+                        logger.warning(f"Batch {step+1}: No new tokens generated or output_ids shorter than input_ids. "
+                                       f"Output shape: {output_ids.shape}, Input shape: {input_ids.shape}")
+                        generated_ids_only = torch.empty((output_ids.shape[0], 0), dtype=torch.long, device=output_ids.device)
+                    
+                    decoded_answers = self.tokenizer.batch_decode(generated_ids_only, skip_special_tokens=True)
+                    results.extend(decoded_answers)
                     if self.verbose:
-                        logger.info(f"Prediction batch {step+1}/{len(dataloader)} done.")
-                        for handler in logger.handlers:
-                            handler.flush()
+                        logger.info(f"Prediction batch {step+1}/{len(dataloader)} done. Generated {len(decoded_answers)} answers.")
                         if hasattr(batch_iter, 'set_postfix'):
-                            batch_iter.set_postfix(batch_done=step+1)
+                            batch_iter.set_postfix(batch_done=f"{step+1}/{len(dataloader)}")
+                            
                 except Exception as e:
                     logger.error(f"Exception in prediction batch {step+1}: {e}")
                     logger.error(traceback.format_exc())
@@ -1969,7 +2021,7 @@ class FineTunerGenBase(AlgorithmBase):
                         torch.cuda.empty_cache()
                     import gc
                     gc.collect()
-                    raise e
+                    raise e # Re-raise the exception to stop execution or handle upstream
         return results
 
     def run(self, X: Seq[Prompt], y: Supervised[Seq[GeneratedText]]) -> Seq[GeneratedText]:
@@ -1998,9 +2050,9 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
     def __init__(
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
-        num_trainable_layers: CategoricalValue(1, 2),#, 4, 8, 16, 32, 64),  # type: ignore
-        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64),#, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
+        batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -2104,7 +2156,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all", "lora_only"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -2200,7 +2252,7 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(64, 128, 256, 512, 1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
