@@ -52,6 +52,14 @@ def supervised_fitness_fn_moo(objectives, target_observations=None):
                   and returns a tuple of scores for each objective function and observations
     """
 
+    import logging
+    logger = logging.getLogger("autogoal.fitness")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        logger.addHandler(handler)
+
     def fitness_fn(
         pipeline: Pipeline,
         X,
@@ -85,92 +93,77 @@ def supervised_fitness_fn_moo(objectives, target_observations=None):
         original_pipeline = pipeline
         eval_pipeline = pipeline
         scores = []
-        
+
         if target_observations is None:
             target_observations = []
-            
+
         observations = {
             'time': {
                 "train": [],
                 "valid": []
             }
         }
-        for _ in range(cross_validation_steps):
-            
-            X_instances = [X]
-            if isinstance(X, tuple):
-                X_instances = list(X)
-                
-            train_indices = []
-            val_indices = []
-            
+
+        logger.info(f"Starting cross-validation: {cross_validation_steps} folds, validation_split={validation_split}, stratified={stratified}")
+        for fold in range(cross_validation_steps):
+            logger.info(f"[Fold {fold+1}/{cross_validation_steps}] Splitting data...")
+            X_instances = list(X) if isinstance(X, tuple) else [X]
+
             if stratified:
                 train_indices, val_indices = stratified_split_indices(y, validation_split)
             else:
-                # Split the data into training and validation sets
                 len_x = len(X_instances[0]) if isinstance(X_instances[0], list) else X_instances[0].shape[0]
                 indices = np.arange(0, len_x)
                 np.random.shuffle(indices)
                 split_index = int(validation_split * len(indices))
                 train_indices = indices[:-split_index]
                 val_indices = indices[-split_index:]
-                
+
             X_train_instances = []
             X_val_instances = []
             for Xi in X_instances:
-                # Split the data into training and validation sets
-                X_train = []
-                X_test = []
-                
                 if isinstance(Xi, list):
-                    X_train, X_test = (
-                        [Xi[i] for i in train_indices],
-                        [Xi[i] for i in val_indices],
-                    )
+                    X_train = [Xi[i] for i in train_indices]
+                    X_test = [Xi[i] for i in val_indices]
                 else:
-                    X_train, X_test = (
-                        Xi[train_indices],
-                        Xi[val_indices],
-                    )
-                    
+                    X_train = Xi[train_indices]
+                    X_test = Xi[val_indices]
                 X_train_instances.append(X_train)
                 X_val_instances.append(X_test)
-                
+
             y_train = y[train_indices]
             y_test = y[val_indices]
 
-            # if able, recreate the pipeline so it wont store much memory
-            # This is additional security against memory leaks
-            if (pipeline_generator is not None):
+            logger.info(f"[Fold {fold+1}] Training pipeline on {len(train_indices)} samples...")
+            if pipeline_generator is not None:
                 original_pipeline.sampler_.replay()
                 eval_pipeline = pipeline_generator(original_pipeline.sampler_)
-            
-            # Train the pipeline on the training set
+
             train_start_time = time.time()
             eval_pipeline.send("train")
             y_train_pred = eval_pipeline.run(*X_train_instances, y_train, **kwargs)
             train_end_time = time.time()
+            logger.info(f"[Fold {fold+1}] Training complete. Time: {train_end_time - train_start_time:.2f}s")
 
-            # Evaluate the pipeline on the validation set
+            logger.info(f"[Fold {fold+1}] Evaluating pipeline on {len(val_indices)} samples...")
             valid_start_time = time.time()
             eval_pipeline.send("eval")
             y_pred = eval_pipeline.run(*X_val_instances, None, **kwargs)
             valid_end_time = time.time()
-            
+            logger.info(f"[Fold {fold+1}] Evaluation complete. Time: {valid_end_time - valid_start_time:.2f}s")
+
             observations['time']['train'].append(train_end_time - train_start_time)
             observations['time']['valid'].append(valid_end_time - valid_start_time)
 
-            # Calculate the scores for each objective function. We additionally pass 
-            # evaluation_time always as users might want to select it for optimization
-            # TODO: If we change how the pipeline training works this should be also targetted for improvement.
+            logger.info(f"[Fold {fold+1}] Calculating objectives...")
             scores.append([objective(y_test, y_pred, evaluation_time=valid_end_time - train_start_time) for objective in objectives])
-            
+
             for (label, obs_func) in target_observations:
-                if not label in observations:
+                if label not in observations:
                     observations[label] = []
                 observations[label].append(obs_func(y_test, y_pred))
-        
-        # Aggregate the scores over the cross-validation steps
+
+        logger.info("Aggregating cross-validation results...")
         scores_per_objective = list(zip(*scores))
         r_scores = tuple(
             [
@@ -178,13 +171,13 @@ def supervised_fitness_fn_moo(objectives, target_observations=None):
                 for score in scores_per_objective
             ]
         )
-        
-        # Aggregate all observations
+
         for label, obs in observations.items():
             if label == 'time':
                 continue
             observations[label] = getattr(statistics, cross_validation)(obs)
-        
+
+        logger.info(f"Cross-validation complete. Scores: {r_scores}")
         return r_scores, observations
 
     return fitness_fn

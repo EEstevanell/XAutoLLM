@@ -1,4 +1,7 @@
+
 import warnings
+import gc
+import traceback
 
 from autogoal.kb import (
     Label,
@@ -687,7 +690,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -868,7 +871,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1150,7 +1153,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1392,7 +1395,8 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half") = "none",  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1406,13 +1410,13 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
             optimizer,
             gradient_accumulation_steps,
             lr_scheduler,
-            # New parameters to control features
             early_stopping_delta,
             use_mixed_precision,
             use_gradient_clipping,
             gradient_clipping_max_norm,
             class_weighted_loss,
             num_workers,
+            data_downsize,
         )
 
 
@@ -1440,7 +1444,8 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half") = "none",  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1455,13 +1460,13 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
             dropout_rate,
             gradient_accumulation_steps,
             lr_scheduler,
-            # New parameters to control features
             early_stopping_delta,
             use_mixed_precision,
             use_gradient_clipping,
             gradient_clipping_max_norm,
             class_weighted_loss,
             num_workers,
+            data_downsize,
         )
 
 
@@ -1548,7 +1553,8 @@ class FineTunerGenBase(AlgorithmBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
@@ -1578,6 +1584,7 @@ class FineTunerGenBase(AlgorithmBase):
         self.device = torch.cuda._get_device(self.device)
         # Set max_new_tokens based on model context window and max_length
         self.max_new_tokens = None  # Will be set after model/tokenizer is loaded
+        self.data_downsize = data_downsize
 
     def init_model(self):
         """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation.
@@ -1677,14 +1684,18 @@ class FineTunerGenBase(AlgorithmBase):
         return Text2TextDataset(X, y, self.tokenizer, self.max_length)
 
     def _setup_optimizer(self):
+        # Only use parameters that require gradients (LoRA/partial finetuning best practice)
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+        if not trainable_params:
+            raise ValueError("No trainable parameters found for optimizer. Check LoRA/partial finetuning setup.")
         if self.optimizer_name == "adamw":
-            return AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            return AdamW(trainable_params, lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_name == "adam":
-            return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            return torch.optim.Adam(trainable_params, lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_name == "sgd":
-            return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            return torch.optim.SGD(trainable_params, lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_name == "adagrad":
-            return torch.optim.Adagrad(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            return torch.optim.Adagrad(trainable_params, lr=self.learning_rate, weight_decay=self.weight_decay)
         else:
             raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
 
@@ -1717,6 +1728,24 @@ class FineTunerGenBase(AlgorithmBase):
             return 0
 
     def finetune(self, X, y):
+        # Downsize data if requested
+        import numpy as np
+        from sklearn.model_selection import train_test_split
+        data_downsize = getattr(self, "data_downsize", "none")
+        if data_downsize not in ("none", None):
+            if data_downsize == "1/4":
+                frac = 0.25
+            elif data_downsize == "half":
+                frac = 0.5
+            else:
+                frac = None
+            if frac is not None and X is not None and len(X) > 1:
+                try:
+                    # For generative models, always use random sampling (no stratify)
+                    X, _, y, _ = train_test_split(X, y, train_size=frac, random_state=42, shuffle=True)
+                except Exception as e:
+                    print(f"[WARN] Data downsize failed, proceeding with full data. Error: {e}")
+                    
         import gc
         import torch
         import logging
@@ -1767,52 +1796,70 @@ class FineTunerGenBase(AlgorithmBase):
             total_loss = 0
             optimizer.zero_grad()
 
-            batch_iter = enumerate(dataloader)
+            # Use recommended tqdm pattern for batch progress bar
             if self.verbose:
-                batch_iter = tqdm(batch_iter, total=len(dataloader), desc=f"Batches (Epoch {epoch+1})", unit="batch", leave=False, disable=not self.verbose)
+                batch_iter = tqdm(dataloader, total=len(dataloader), desc=f"Batches (Epoch {epoch+1})", unit="batch", leave=False, disable=not self.verbose)
+            else:
+                batch_iter = dataloader
 
-            for step, batch in batch_iter:
-                try:
-                    batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
-                    if 'labels' in batch:
-                        batch['labels'] = batch['labels'].clone().detach().to(self.device, non_blocking=True)
-                    if self.use_mixed_precision and scaler is not None:
-                        with torch.amp.autocast(device_type=self.device.type):
+            failed_batches = 0
+            for step, batch in enumerate(batch_iter):
+                retry_count = 0
+                while retry_count < 3:
+                    try:
+                        batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
+                        if 'labels' in batch:
+                            batch['labels'] = batch['labels'].clone().detach().to(self.device, non_blocking=True)
+                        if self.use_mixed_precision and scaler is not None:
+                            with torch.amp.autocast(device_type=self.device.type):
+                                outputs = self.model(**batch)
+                                loss = outputs.loss
+                        else:
                             outputs = self.model(**batch)
                             loss = outputs.loss
-                    else:
-                        outputs = self.model(**batch)
-                        loss = outputs.loss
-                    loss = loss / self.gradient_accumulation_steps
-                    if self.use_mixed_precision and scaler is not None:
-                        scaler.scale(loss).backward()
-                    else:
-                        loss.backward()
-                    if (step + 1) % self.gradient_accumulation_steps == 0 or (step + 1) == len(dataloader):
-                        if self.use_gradient_clipping:
-                            if self.use_mixed_precision and scaler is not None:
-                                scaler.unscale_(optimizer)
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clipping_max_norm)
+                        loss = loss / self.gradient_accumulation_steps
                         if self.use_mixed_precision and scaler is not None:
-                            scaler.step(optimizer)
-                            scaler.update()
+                            scaler.scale(loss).backward()
                         else:
-                            optimizer.step()
-                        scheduler.step()
-                        optimizer.zero_grad()
-                    total_loss += loss.detach().item() * self.gradient_accumulation_steps
-                except Exception as batch_exc:
-                    logger.error(f"Exception in training batch (epoch {epoch+1}, batch {step+1}): {batch_exc}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    # Optionally, break or continue depending on severity
-                    continue
-
-                # Log every 10 batches or at the end
-                if self.verbose and (step % 10 == 0 or (step + 1) == len(dataloader)):
-                    logger.info(f"Epoch {epoch+1} Batch {step+1}/{len(dataloader)}: loss={loss.item():.4f}")
-                    for handler in logger.handlers:
-                        handler.flush()
+                            loss.backward()
+                        if (step + 1) % self.gradient_accumulation_steps == 0 or (step + 1) == len(dataloader):
+                            if self.use_gradient_clipping:
+                                if self.use_mixed_precision and scaler is not None:
+                                    scaler.unscale_(optimizer)
+                                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clipping_max_norm)
+                            if self.use_mixed_precision and scaler is not None:
+                                scaler.step(optimizer)
+                                scaler.update()
+                            else:
+                                optimizer.step()
+                            scheduler.step()
+                            optimizer.zero_grad()
+                        total_loss += loss.detach().item() * self.gradient_accumulation_steps
+                        # Log every batch and update tqdm progress bar with loss
+                        if self.verbose:
+                            logger.info(f"Epoch {epoch+1} Batch {step+1}/{len(dataloader)}: loss={loss.item():.4f}")
+                            for handler in logger.handlers:
+                                handler.flush()
+                            if hasattr(batch_iter, 'set_postfix'):
+                                batch_iter.set_postfix(loss=loss.item())
+                        break  # Success, break retry loop
+                    except Exception as batch_exc:
+                        retry_count += 1
+                        logger.error(f"Exception in training batch (epoch {epoch+1}, batch {step+1}), attempt {retry_count}: {batch_exc}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        if self.device.type == "cuda":
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        if retry_count >= 3:
+                            logger.error(f"Batch (epoch {epoch+1}, batch {step+1}) failed after 3 attempts. Skipping batch.")
+                            failed_batches += 1
+                            if failed_batches >= 2:
+                                logger.error(f"Aborting training: {failed_batches} batches failed in epoch {epoch+1}. Training stopped.")
+                                raise batch_exc
+                            break
+                        else:
+                            continue
 
             avg_loss = total_loss / len(dataloader)
             if self.verbose:
@@ -1843,9 +1890,11 @@ class FineTunerGenBase(AlgorithmBase):
         return y
 
     def predict(self, X):
-        """Generate texts for input prompts X using the loaded generative model."""
+        """Generate texts for input prompts X using the loaded generative model, with tqdm/logging progress bar and optimal generation settings."""
+        import logging
+        from tqdm import tqdm
+        import torch
         # Prepare dataset and dataloader
-        # Use simple dataset for tokenizing prompts without targets
         dataset = SimpleTextDataset(X, None, self.tokenizer, self.max_length)
         dataloader = DataLoader(
             dataset,
@@ -1855,35 +1904,84 @@ class FineTunerGenBase(AlgorithmBase):
         )
         self.model.eval()
         results = []
+        logger = logging.getLogger("autogoal.predict")
+        logger.setLevel(logging.INFO)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            logger.addHandler(handler)
+        # Best practices for prediction: pin_memory, non_blocking, autocast, error handling, and logging
+        use_amp = self.use_mixed_precision and self.device.type == "cuda"
+        pin_memory = self.device.type == "cuda"
+        # Re-create dataloader with pin_memory if needed
+        if getattr(dataloader, 'pin_memory', False) != pin_memory:
+            dataloader = DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self._get_num_workers(),
+                pin_memory=pin_memory,
+            )
+        batch_iter = tqdm(dataloader, total=len(dataloader), desc="Predicting", unit="batch", leave=True, disable=not self.verbose)
         with torch.no_grad():
-            for batch in dataloader:
-                # Move inputs to device
-                inputs = {k: v.to(self.device) for k, v in batch.items() if k != 'labels'}
-                input_ids = inputs.get('input_ids')
-                # Defensive check is no longer needed: max_new_tokens is always computed to fit the context window
-                input_length = input_ids.shape[1] if input_ids is not None else 0
-                # Generate output ids
-                output_ids = self.model.generate(
-                    input_ids=input_ids,
-                    attention_mask=inputs.get('attention_mask'),
-                    max_new_tokens=self.max_new_tokens,
-                    num_beams=1,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                )
-                # Decode generated tokens
-                decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-                results.extend(decoded)
+            for step, batch in enumerate(batch_iter):
+                try:
+                    # Use non_blocking transfer for CUDA, and ensure all tensors are on the correct device
+                    inputs = {k: v.to(self.device, non_blocking=pin_memory) for k, v in batch.items() if k != 'labels'}
+                    input_ids = inputs.get('input_ids')
+                    # Set a hard cap for max_new_tokens for safety
+                    max_new_tokens = min(self.max_new_tokens or 32, 128)
+                    eos_token_id = self.tokenizer.eos_token_id
+                    logger.info(f"Batch {step+1}: input_ids shape={input_ids.shape}, max_new_tokens={max_new_tokens}")
+                    if use_amp:
+                        with torch.amp.autocast(device_type=self.device.type):
+                            output_ids = self.model.generate(
+                                input_ids=input_ids,
+                                attention_mask=inputs.get('attention_mask'),
+                                max_new_tokens=max_new_tokens,
+                                num_beams=1,
+                                do_sample=False,
+                                pad_token_id=self.tokenizer.pad_token_id,
+                                eos_token_id=eos_token_id,
+                            )
+                    else:
+                        output_ids = self.model.generate(
+                            input_ids=input_ids,
+                            attention_mask=inputs.get('attention_mask'),
+                            max_new_tokens=max_new_tokens,
+                            num_beams=1,
+                            do_sample=False,
+                            pad_token_id=self.tokenizer.pad_token_id,
+                            eos_token_id=eos_token_id,
+                        )
+                    decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+                    results.extend(decoded)
+                    if self.verbose:
+                        logger.info(f"Prediction batch {step+1}/{len(dataloader)} done.")
+                        for handler in logger.handlers:
+                            handler.flush()
+                        if hasattr(batch_iter, 'set_postfix'):
+                            batch_iter.set_postfix(batch_done=step+1)
+                except Exception as e:
+                    logger.error(f"Exception in prediction batch {step+1}: {e}")
+                    logger.error(traceback.format_exc())
+                    if self.device.type == "cuda":
+                        torch.cuda.empty_cache()
+                    import gc
+                    gc.collect()
+                    raise e
         return results
 
     def run(self, X: Seq[Prompt], y: Supervised[Seq[GeneratedText]]) -> Seq[GeneratedText]:
         if self._mode == "train":
+            print("Finetuning mode")
             # Perform finetuning
             return self.finetune(X, y)
         else:
             # Ensure model is initialized before prediction
             if self.model is None or self.tokenizer is None:
                 raise ValueError("Model and tokenizer must be initialized and tuned before prediction.")
+            print("Prediction mode")
             # Perform prediction
             return self.predict(X)
 
@@ -1915,7 +2013,8 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -1935,6 +2034,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
             early_stopping_delta,
             early_stopping_patience,
             num_workers,
+            data_downsize,
             verbose,
         )
         self.num_trainable_layers = num_trainable_layers
@@ -2017,7 +2117,8 @@ class LoraGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2037,6 +2138,7 @@ class LoraGenLLMTask(FineTunerGenBase):
             early_stopping_delta,
             early_stopping_patience,
             num_workers,
+            data_downsize,
             verbose,
         )
         self.lora_r = lora_r
@@ -2046,33 +2148,36 @@ class LoraGenLLMTask(FineTunerGenBase):
 
     def init_model(self):
         super().init_model()
+        import logging
+        logger = logging.getLogger("autogoal.lora")
+        logger.setLevel(logging.INFO)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            logger.addHandler(handler)
+
         # Automatically determine target_modules for LoRA
         import torch.nn as nn
-        import transformers
-        # Common module names for attention layers in HF models
         candidate_keywords = [
             "q_proj", "v_proj", "k_proj", "o_proj",  # Llama, Mistral, Falcon, etc.
             "query", "key", "value", "dense",        # BERT, GPT2, T5, etc.
             "attn", "proj", "fc", "mlp"
         ]
-        # Collect all unique module names containing these keywords
         target_modules = set()
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Linear):
                 for kw in candidate_keywords:
                     if kw in name:
-                        # Only add the last part of the module name (actual layer)
                         last = name.split(".")[-1]
                         target_modules.add(last)
-        # Fallback: if nothing found, use all Linear layers
         if not target_modules:
             for name, module in self.model.named_modules():
                 if isinstance(module, nn.Linear):
                     last = name.split(".")[-1]
                     target_modules.add(last)
-        # Convert to sorted list for reproducibility
         target_modules = sorted(target_modules)
-        # Apply LoRA using PEFT
+        logger.info(f"[LoRA] Target modules for LoRA: {target_modules}")
+
         lora_config = LoraConfig(
             r=self.lora_r,
             lora_alpha=self.lora_alpha,
@@ -2108,7 +2213,8 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("16"),  # type: ignore
+        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2128,5 +2234,6 @@ class FineTuneGenLLMTask(FineTunerGenBase):
             early_stopping_delta,
             early_stopping_patience,
             num_workers,
+            data_downsize,
             verbose,
         )
