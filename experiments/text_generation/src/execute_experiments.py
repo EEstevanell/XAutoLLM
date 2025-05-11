@@ -550,15 +550,20 @@ class ExperimentExecutor:
                 FineTuneGenLLMTask,
                 LoraGenLLMTask,
                 PartialFineTuneGenLLMTask,
-            ] + find_classes(include="TEXT_GEN", exclude="T5")
+            ] + find_classes(include="TEXT_GEN")
+            
+            # List the names of the classes found by find_classes
+            found_class_names = [cls.__name__ for cls in algorithm_registry[3:]]  # skip the first 3 manual classes
+            print("Classes found by find_classes(include='TEXT_GEN'):", found_class_names)
 
             model = AutoML(
                 input=(Seq[Prompt], Supervised[Seq[GeneratedText]]),
                 output=Seq[GeneratedText],
                 random_state=seed,
                 registry=algorithm_registry,
-                evaluation_timeout=1.5 * Hour,
-                memory_limit=45 * Gb,
+                pop_size=15,
+                evaluation_timeout=2 * Hour,
+                memory_limit=100 * Gb,
                 # multi-objective baseline uses 48 hours for search timeout
                 search_timeout=48 * Hour if is_baseline else 24 * Hour,
                 cross_validation_steps=1,
