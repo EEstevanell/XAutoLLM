@@ -673,7 +673,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         self,
         inner_model: algorithm(*[Word, VectorContinuous], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -854,7 +854,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         inner_model: algorithm(*[Word, VectorContinuous], include=["transformer"]),  # type: ignore
         num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1134,7 +1134,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all", "lora_only"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1378,7 +1378,7 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1427,7 +1427,7 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1480,7 +1480,7 @@ class LoraGenLLMClassifier(LoraLLMEmbeddingClassifier):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1540,7 +1540,7 @@ class FineTunerGenBase(AlgorithmBase):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -1946,6 +1946,17 @@ class FineTunerGenBase(AlgorithmBase):
             handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
             logger.addHandler(handler)
             
+        # --- LoRA Specific: Ensure adapters are enabled for PEFT models ---
+        # This check makes the method robust for both LoRA and non-LoRA models.
+        if hasattr(self.model, 'enable_adapters') and callable(getattr(self.model, 'enable_adapters')):
+            try:
+                logger = logging.getLogger("autogoal.predict") # Get logger instance
+                logger.info("Attempting to enable LoRA adapters for prediction.")
+                self.model.enable_adapters()
+            except Exception as e:
+                logger = logging.getLogger("autogoal.predict")
+                logger.warning(f"Could not enable LoRA adapters, proceeding without explicit enable. Error: {e}")
+            
         # Best practices for prediction: pin_memory, non_blocking, autocast, error handling, and logging
         use_amp = self.use_mixed_precision and self.device.type == "cuda"
         pin_memory_flag = (self.device.type == "cuda")
@@ -2052,7 +2063,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         num_trainable_layers: CategoricalValue(1, 2, 4, 8, 16, 32, 64),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -2156,7 +2167,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         lora_dropout: CategoricalValue(0.0, 0.1, 0.2, 0.3),  # type: ignore
         lora_bias: CategoricalValue("none", "all", "lora_only"),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore
@@ -2252,7 +2263,7 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         self,
         inner_model: algorithm(*[Prompt, GeneratedText], include=["transformer"]),  # type: ignore
         batch_size: CategoricalValue(2, 4, 8, 16, 32, 64, 128, 256),  # type: ignore
-        max_length: CategoricalValue(1024, 2048, 4096),  # type: ignore
+        max_length: CategoricalValue(512, 700, 1024, 2048, 4096),  # type: ignore
         learning_rate: CategoricalValue(5e-6, 1e-5, 2e-5, 3e-5, 4e-5, 5e-5, 1e-4),  # type: ignore
         epochs: DiscreteValue(1, 10),  # type: ignore
         warmup_steps: CategoricalValue(0, 100, 500, 1000, 1500, 2000),  # type: ignore

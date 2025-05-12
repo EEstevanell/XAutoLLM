@@ -67,7 +67,7 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str], *a
 
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute F1 score.")
-        return -1.0  # Indicate error
+        raise ValueError("SQuAD metric not loaded. Cannot compute F1 score.")
 
     try:
         formatted_data = _format_squad_inputs(reference_texts, prediction_texts)
@@ -79,7 +79,7 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str], *a
         return results["f1"]
     except Exception as e:
         print(f"Error during F1 computation: {e}")
-        return -1.0
+        raise e  # Raise the exception to indicate failure
 
 def compute_squad_exact_match(
     reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
@@ -100,7 +100,7 @@ def compute_squad_exact_match(
 
     if squad_metric is None:
         print("SQuAD metric not loaded. Cannot compute Exact Match score.")
-        return -1.0  # Indicate error
+        raise ValueError("SQuAD metric not loaded. Cannot compute Exact Match score.")
 
     try:
         formatted_data = _format_squad_inputs(reference_texts, prediction_texts)
@@ -112,7 +112,7 @@ def compute_squad_exact_match(
         return results["exact_match"]
     except Exception as e:
         print(f"Error during Exact Match computation: {e}")
-        return -1.0
+        raise e
 
 def load(make_prompt: bool, *args, **kwargs):
     try:
