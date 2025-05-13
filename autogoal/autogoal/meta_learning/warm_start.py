@@ -1032,3 +1032,9 @@ class WarmStart:
                 if isinstance(value, UnormalizedWeightParam) and value.value == 0:
                     # Clip the value to a minimum of 0.001
                     self._model[item] = UnormalizedWeightParam(value=0.001)
+
+# Module-level logger is assumed to be defined as:
+# import logging
+# logger = logging.getLogger(__name__)
+# Ensure numpy is imported as np if not already: import numpy as np
+# Ensure typing imports like Dict, List, Optional, np are available.

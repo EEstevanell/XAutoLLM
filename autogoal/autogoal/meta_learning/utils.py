@@ -3,7 +3,7 @@
 from dataclasses import asdict, dataclass
 import inspect
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from autogoal.kb._algorithm import Algorithm, AlgorithmBase, Pipeline
 
@@ -152,6 +152,7 @@ class MetricSpec:
     name: str
     weight: float = 1.0
     maximize: bool = True  # Always set internally, not required from user
+    best_value: Optional[float] = None  # Ideal or target value for this metric
 
     def to_metric(self, value: Any) -> Metric:
         return Metric(name=self.name, maximize=self.maximize, value=float(value))
@@ -160,9 +161,12 @@ class MetricSpec:
     def from_dict(cls, d: dict) -> "MetricSpec":
         """
         Create a MetricSpec from a dictionary, using defaults for missing fields.
-        Only 'name' and optionally 'weight' are required from user.
+        Only 'name' and optionally 'weight' and 'best_value' are required from user.
         """
+        if not d.get("name"):
+            raise ValueError("MetricSpec requires a 'name' field in from_dict.")
         return cls(
             name=d.get("name"),
             weight=d.get("weight", 1.0),
+            best_value=d.get("best_value"),  # Add best_value here
         )
