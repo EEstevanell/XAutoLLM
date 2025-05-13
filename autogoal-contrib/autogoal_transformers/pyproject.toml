@@ -24,6 +24,7 @@ numpy = "1.26.4"
 huggingface-hub = "^0.26.1"
 rouge-score = "^0.1.2"
 sentence-transformers = "^4.1.0"
+bitsandbytes = "^0.45.5"
 
 [build-system]
 requires = ["poetry-core"]

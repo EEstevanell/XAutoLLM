@@ -16,6 +16,7 @@ from autogoal.ml import AutoML, evaluation_time
 from autogoal.kb import Seq, Supervised, Prompt, GeneratedText
 from autogoal_transformers._generated import (
     TEXT_GEN_Gpt2,
+    TEXT_GEN_Gpt2_Xl,
     TEXT_GEN_Meta_Llama_Llama_32_1B,
     TEXT_GEN_Microsoft_Phi_4_Mini_Instruct,
     TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
@@ -261,6 +262,7 @@ def main():
     initialize_cuda_multiprocessing()
 
     # Configure CUDA if available
+    import torch
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.set_device(0)  # Use first GPU by default
@@ -294,7 +296,7 @@ def main():
             # TEXT_GEN_Gpt2,
             TEXT_GEN_Meta_Llama_Llama_32_1B,
             # TEXT_GEN_Microsoft_Phi_4_Mini_Instruct,
-            # TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
+            TEXT_GEN_Microsoft_Phi_35_Mini_Instruct,
             # TEXT_GEN_Mistralai_Mistral_7B_V01,
             # TEXT_GEN_Facebook_Bart_Base,
             # TEXT_GEN_Deepseek_Ai_Deepseek_R1_Distill_Qwen_7B,
@@ -398,31 +400,44 @@ def main():
         },
     ]
 
+
     # Run the experiment
     logger.info("Starting CNN/Dailymail experiment")
     start_time = time.time()
 
-    model = FineTuneGenLLMTask(
-        inner_model=TEXT_GEN_Google_T5_T5_Small(),
-        batch_size=8,
-        max_length=2048,
-        learning_rate=5e-06,
+    import torch
+
+    model_save_path = "trained_model"
+    model_ckpt_path = os.path.join(model_save_path, "model.pt")
+    os.makedirs(model_save_path, exist_ok=True)
+
+    model = LoraGenLLMTask(
+        inner_model=TEXT_GEN_Meta_Llama_Llama_32_1B(),
+        lora_r=8,
+        lora_alpha=8,
+        lora_dropout=0.1,
+        lora_bias="none",
+        batch_size=2,
+        max_length=1024,
+        learning_rate=1e-5,
         epochs=1,
         warmup_steps=2000,
         weight_decay=0.001,
+        optimizer="adamw",
         gradient_accumulation_steps=2,
-        lr_scheduler="cosine_with_restarts",
+        lr_scheduler="linear",
         use_mixed_precision=True,
-        use_gradient_clipping=False,
         gradient_clipping_max_norm=0.5,
         early_stopping_delta=0.001,
         early_stopping_patience=6,
         num_workers="default",
         data_downsize="half",
+        quantization="bnb-8bit",
         verbose=True,
     )
 
-    len_x = len(X_train[0]) if isinstance(X_train[0], list) else X_train[0].shape[0]
+    X_instances = list(X_train) if isinstance(X_train, tuple) else [X_train]
+    len_x = len(X_instances[0])
     indices = np.arange(0, len_x)
     np.random.shuffle(indices)
     split_index = int(0.3 * len(indices))
@@ -431,39 +446,108 @@ def main():
                 
     X_train_instances = []
     X_val_instances = []
-    for Xi in X_train:
+    for Xi in X_instances:
         if isinstance(Xi, list):
-            X_train = [Xi[i] for i in train_indices]
-            X_test = [Xi[i] for i in val_indices]
+            X_train_i = [Xi[i] for i in train_indices]
+            X_test_i = [Xi[i] for i in val_indices]
         else:
-            X_train = Xi[train_indices]
-            X_test = Xi[val_indices]
-        X_train_instances.append(X_train)
-        X_val_instances.append(X_test)
-    y_train_instances = y_train[train_indices]
-    y_test_instances = y_train[val_indices]
+            X_train_i = Xi[train_indices]
+            X_test_i = Xi[val_indices]
+            
+        X_train_instances.append(X_train_i)
+        X_val_instances.append(X_test_i)
+    y_train_instances = np.array(y_train)[train_indices]
+    y_test_instances = np.array(y_train)[val_indices]
+
+    # Always initialize model before use
+    model.init_model()
     
-    # Train model
-    model.train()
-    train_predictions = model.run(X_train_instances, y_train_instances)
+    # Check if checkpoint exists
+    if os.path.exists(model_ckpt_path):
+        logger.info(f"Checkpoint found at {model_ckpt_path}, loading weights and skipping training.")
+        model.init_model()  # Make sure model.model is initialized
+        checkpoint = torch.load(model_ckpt_path, map_location="cpu")
+        model.model.load_state_dict(checkpoint)
+        logger.info("Model weights loaded from checkpoint.")
+        skip_training = True
+    else:
+        logger.info("No checkpoint found, proceeding with training.")
+        skip_training = False
+        
+
+    if not skip_training:
+        model.eval()
+        pre_predictions = model.predict(X_test[:20])
+        
+        try:
+            with open("pre-predictions.json", "w") as f:
+                json.dump(pre_predictions, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving pre-predictions: {e}")
+        
+        # Train model
+        model.train()
+        train_predictions = model.run(*X_train_instances, y_train_instances)
+        try:
+            with open("training-predictions.json", "w") as f:
+                json.dump(list(train_predictions), f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving training predictions: {e}")
+    else:
+        logger.info("Skipping training, using loaded model for testing only.")
+        
     model.eval()
-    val_predictions = model.run(X_val_instances)
+    val_predictions = model.predict(X_test[:20])
+    try:
+        with open("val-predictions-test.json", "w") as f:
+            json.dump(list(y_test[:20]), f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving val-predictions-test: {e}")
+    try:
+        with open("val-predictions.json", "w") as f:
+            json.dump(list(val_predictions), f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving val-predictions: {e}")
     logger.info("Training completed")
+    # Save the trained model weights (state_dict)
+    try:
+        torch.save(model.model.state_dict(), model_ckpt_path)
+        logger.info(f"Model weights saved to {model_ckpt_path}")
+    except Exception as e:
+        logger.error(f"Error saving model weights: {e}")
     
-    f1 = drop.compute_f1(y_train_instances, train_predictions)
-    em = drop.compute_exact_match(y_train_instances, train_predictions)
+    f1 = drop.compute_f1(y_test[:20], val_predictions)
+    em = drop.compute_exact_match(y_test[:20], val_predictions)
     logger.info(f"Train set results: F1: {f1:.4f}, EM: {em:.4f}")
+        
     # Evaluate on test set
     logger.info("Evaluating best pipeline on test set")
     predictions = model.predict(X_test)
+    try:
+        with open("test-predictions.json", "w") as f:
+            json.dump(list(predictions), f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving test-predictions: {e}")
+    try:
+        with open("post-predictions.json", "w") as f:
+            json.dump(list(predictions)[:20], f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving post-predictions: {e}")
+
     # Calculate metrics
     test_f1 = drop.compute_f1(y_test, predictions)
     test_em = drop.compute_exact_match(y_test, predictions)
-    
+
     # Log results
     logger.info("Test set results:")
     logger.info(f"Exact Match: {test_em:.4f}")
     logger.info(f"F1 Score: {test_f1:.4f}")
+
+    # Example: Reload the model for further tests
+    # from autogoal_transformers._manual import FineTuneGenLLMTask
+    # reloaded_model = FineTuneGenLLMTask.load_model("trained_model")
+    # reloaded_model.eval()
+    # new_predictions = reloaded_model.predict(X_test[:5])
 
 if __name__ == "__main__":
     main()

@@ -16,10 +16,8 @@ def compute_drop_f1_em_metric(predictions: List[str], references: List[str]) -> 
     The 'squad' metric is used as it handles extractive QA tasks with multiple references/predictions.
 
     Args:
-        predictions (List[str]): Each is a JSON string decoding to a list of predicted answer spans.
-                                 Example: '["answer span 1", "another span"]'
-        references (List[str]): Each is a JSON string decoding to an object with "spans" (list of gold answer spans).
-                                Example: '{"spans": ["gold span 1", "gold span 2"]}'
+        predictions (List[str]): Each is a string (predicted answer span, possibly multi-span as a single string).
+        references (List[str]): Each is a string (gold answer span, possibly multi-span as a single string).
     Returns:
         Dict[str, float]: {"f1": ..., "exact_match": ...}
     """
@@ -27,29 +25,14 @@ def compute_drop_f1_em_metric(predictions: List[str], references: List[str]) -> 
         raise ValueError("Predictions and references must have the same length.")
 
     squad_metric = evaluate.load("squad")
-    
+
     formatted_predictions = []
     formatted_references = []
 
-    for i, (pred_json_str, ref_json_str) in enumerate(zip(predictions, references)):
-        # Parse prediction
-        try:
-            pred_spans_list = json.loads(pred_json_str)
-            if not isinstance(pred_spans_list, list): # Handle single string prediction
-                pred_spans_list = [str(pred_spans_list)]
-            prediction_text_for_squad = " ".join(pred_spans_list) if pred_spans_list else ""
-        except Exception:
-            prediction_text_for_squad = ""
-
-        # Parse reference
-        try:
-            ref_obj = json.loads(ref_json_str)
-            gold_spans = ref_obj.get("spans", [])
-            if not isinstance(gold_spans, list):
-                gold_spans = [str(gold_spans)]
-            gold_spans = [str(s) for s in gold_spans]
-        except Exception:
-            gold_spans = [""]
+    for i, (pred_text, ref_text) in enumerate(zip(predictions, references)):
+        prediction_text_for_squad = pred_text if pred_text is not None else ""
+        # Reference is now a plain string (not JSON)
+        gold_spans = [ref_text] if ref_text is not None else [""]
 
         formatted_predictions.append({
             "id": str(i),
@@ -59,15 +42,15 @@ def compute_drop_f1_em_metric(predictions: List[str], references: List[str]) -> 
             "id": str(i),
             "answers": {
                 "text": gold_spans if gold_spans else [""],
-                "answer_start": [-1] * len(gold_spans) # answer_start is often needed, -1 if not applicable
+                "answer_start": [-1] * len(gold_spans)
             }
         })
 
-    if not formatted_predictions: # No valid data to score
+    if not formatted_predictions:
         return {"f1": 0.0, "exact_match": 0.0}
 
     results = squad_metric.compute(predictions=formatted_predictions, references=formatted_references)
-    
+
     return {"f1": results.get("f1", 0.0) / 100.0, "exact_match": results.get("exact_match", 0.0) / 100.0}
 
 
@@ -158,16 +141,22 @@ def load(make_prompt: bool, *args, **kwargs) -> Tuple[
                         try:
                             answers_data = json.loads(answers_json_str)
                             spans_list = answers_data.get("spans")
-                            types_list = answers_data.get("types") # Get types
+                            types_list = answers_data.get("types")
 
                             # Ensure all components are valid and lists of the same length
                             if isinstance(spans_list, list) and \
                                isinstance(types_list, list) and \
                                len(spans_list) == len(types_list):
-                                # Convert all spans to string, just in case they aren't
-                                cleaned_spans = [str(s) for s in spans_list]
-                                # Only store the spans list as the answer (less noise for tuning)
-                                y_target_string = json.dumps(cleaned_spans)
+                                # Convert all spans to string, just in case they aren't, and remove duplicates while preserving order
+                                seen = set()
+                                cleaned_spans = []
+                                for s in spans_list:
+                                    s_str = str(s)
+                                    if s_str not in seen:
+                                        seen.add(s_str)
+                                        cleaned_spans.append(s_str)
+                                # Store the plain text answer (all unique spans concatenated with comma)
+                                y_target_string = ", ".join(cleaned_spans)
                                 X.append((passage, question))
                                 y.append(y_target_string)
                             else:
@@ -216,4 +205,5 @@ def load(make_prompt: bool, *args, **kwargs) -> Tuple[
 if __name__ == "__main__":
     print("DROP dataset loading and new metric functions are defined.")
     print("Run tests separately if you have them for the new evaluate-based metrics.")
+    X_train, y_train, X_test, y_test = load(make_prompt=True)
     pass
