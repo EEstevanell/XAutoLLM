@@ -1570,7 +1570,7 @@ class FineTunerGenBase(AlgorithmBase):
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
         num_workers: CategoricalValue("default", "16"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit"),  # type: ignore
+        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
@@ -1926,8 +1926,19 @@ class FineTunerGenBase(AlgorithmBase):
             def encode_batch(batch):
                 inputs = [item["input"] for item in batch]
                 targets = [item["target"] for item in batch]
-                model_inputs = self.tokenizer(inputs, max_length=self.max_length, padding=True, truncation=True, return_tensors="pt")
-                labels = self.tokenizer(targets, max_length=self.max_length, padding=True, truncation=True, return_tensors="pt")["input_ids"]
+                # Dynamic padding: pad to the longest in batch
+                model_inputs = self.tokenizer(
+                    inputs,
+                    padding=True,  # dynamic padding
+                    truncation=True,
+                    return_tensors="pt"
+                )
+                labels = self.tokenizer(
+                    targets,
+                    padding=True,  # dynamic padding
+                    truncation=True,
+                    return_tensors="pt"
+                )["input_ids"]
                 labels[labels == self.tokenizer.pad_token_id] = -100
                 model_inputs["labels"] = labels
                 return model_inputs
@@ -1936,7 +1947,12 @@ class FineTunerGenBase(AlgorithmBase):
                 prompts = [item["prompt"] for item in batch]
                 completions = [item["completion"] for item in batch]
                 texts = [p + c for p, c in zip(prompts, completions)]
-                model_inputs = self.tokenizer(texts, max_length=self.max_length, padding=True, truncation=True, return_tensors="pt")
+                model_inputs = self.tokenizer(
+                    texts,
+                    padding=True,  # dynamic padding
+                    truncation=True,
+                    return_tensors="pt"
+                )
                 labels = model_inputs["input_ids"].clone()
                 labels[labels == self.tokenizer.pad_token_id] = -100
                 model_inputs["labels"] = labels
@@ -2346,7 +2362,7 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
         num_workers: CategoricalValue("default", "16"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit"),  # type: ignore
+        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2464,7 +2480,7 @@ class LoraGenLLMTask(FineTunerGenBase):
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
         num_workers: CategoricalValue("default", "16"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit"),  # type: ignore
+        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2614,7 +2630,7 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
         num_workers: CategoricalValue("default", "16"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit"),  # type: ignore
+        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
