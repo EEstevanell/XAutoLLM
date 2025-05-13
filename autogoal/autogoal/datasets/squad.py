@@ -50,6 +50,47 @@ def _format_squad_inputs(
 
     return {"predictions": formatted_predictions, "references": formatted_references}
 
+def _get_squad_scores(reference_texts: List[str], prediction_texts: List[str]) -> Dict[str, float]:
+    """
+    Computes SQuAD F1 and Exact Match scores using the Hugging Face evaluate library.
+    Helper function to centralize metric loading and computation.
+
+    Args:
+        reference_texts: A list of corresponding ground-truth answer strings.
+        prediction_texts: A list of predicted answer strings.
+
+    Returns:
+        A dictionary containing 'f1' and 'exact_match' scores.
+
+    Raises:
+        ValueError: If the SQuAD metric cannot be loaded.
+        Exception: If an error occurs during metric computation.
+    """
+    from evaluate import load
+
+    squad_metric = load("squad")
+
+    if squad_metric is None:
+        # This case should ideally be handled by the `load` function itself
+        # raising an error if the metric cannot be found/loaded.
+        print("SQuAD metric not loaded. Cannot compute scores.")
+        raise ValueError("SQuAD metric not loaded. Cannot compute scores.")
+
+    try:
+        formatted_data = _format_squad_inputs(reference_texts, prediction_texts)
+        results = squad_metric.compute(
+            predictions=formatted_data["predictions"],
+            references=formatted_data["references"],
+        )
+        # Ensure results is a dictionary, which squad_metric.compute should return
+        if not isinstance(results, dict):
+            print(f"Unexpected results type from squad_metric.compute: {type(results)}")
+            raise ValueError("SQuAD metric computation returned an unexpected type.")
+        return results
+    except Exception as e:
+        print(f"Error during SQuAD metric computation: {e}")
+        raise  # Re-raise the exception to indicate failure
+
 def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str], *args, **kwargs) -> float:
     """
     Computes the official SQuAD F1 score given lists of prediction and reference texts.
@@ -59,27 +100,12 @@ def compute_squad_f1(reference_texts: List[str], prediction_texts: List[str], *a
         reference_texts: A list of corresponding ground-truth answer strings.
 
     Returns:
-        float: The average F1 score (0-100). Returns -1.0 if metric loading failed.
+        float: The average F1 score (0-100). Returns -1.0 if the 'f1' key is not in results.
     """
-    from evaluate import load
-
-    squad_metric = load("squad")
-
-    if squad_metric is None:
-        print("SQuAD metric not loaded. Cannot compute F1 score.")
-        raise ValueError("SQuAD metric not loaded. Cannot compute F1 score.")
-
-    try:
-        formatted_data = _format_squad_inputs(reference_texts, prediction_texts)
-        results = squad_metric.compute(
-            predictions=formatted_data["predictions"],
-            references=formatted_data["references"],
-        )
-        print(f"F1 Score: {results['f1']}")
-        return results["f1"]
-    except Exception as e:
-        print(f"Error during F1 computation: {e}")
-        raise e  # Raise the exception to indicate failure
+    results = _get_squad_scores(reference_texts, prediction_texts)
+    f1_score = results.get("f1", -1.0)  # Use .get for safer access
+    print(f"F1 Score: {f1_score}")
+    return f1_score
 
 def compute_squad_exact_match(
     reference_texts: List[str], prediction_texts: List[str], *args, **kwargs
@@ -92,27 +118,12 @@ def compute_squad_exact_match(
         reference_texts: A list of corresponding ground-truth answer strings.
 
     Returns:
-        float: The average Exact Match score (0-100). Returns -1.0 if metric loading failed.
+        float: The average Exact Match score (0-100). Returns -1.0 if 'exact_match' not in results.
     """
-    from evaluate import load
-
-    squad_metric = load("squad")
-
-    if squad_metric is None:
-        print("SQuAD metric not loaded. Cannot compute Exact Match score.")
-        raise ValueError("SQuAD metric not loaded. Cannot compute Exact Match score.")
-
-    try:
-        formatted_data = _format_squad_inputs(reference_texts, prediction_texts)
-        results = squad_metric.compute(
-            predictions=formatted_data["predictions"],
-            references=formatted_data["references"],
-        )
-        print(f"Exact Match Score: {results['exact_match']}")
-        return results["exact_match"]
-    except Exception as e:
-        print(f"Error during Exact Match computation: {e}")
-        raise e
+    results = _get_squad_scores(reference_texts, prediction_texts)
+    em_score = results.get("exact_match", -1.0)  # Use .get for safer access
+    print(f"Exact Match Score: {em_score}")
+    return em_score
 
 def load(make_prompt: bool, *args, **kwargs):
     try:

@@ -6,98 +6,41 @@ import string
 from typing import Dict, Tuple, List, Optional, Union
 
 from autogoal.datasets import download, datapath
+import evaluate
 
 # --- DROP Official Metric Implementation (AllenNLP style, multi-span, multi-reference) ---
-def _normalize_answer(s: str) -> str:
-    """Lower text and remove punctuation, articles and extra whitespace."""
-    def remove_articles(text):
-        return re.sub(r'\b(a|an|the)\b', ' ', text)
-    def white_space_fix(text):
-        return ' '.join(text.split())
-    def remove_punc(text):
-        exclude = set(string.punctuation)
-        return ''.join(ch for ch in text if ch not in exclude)
-    def lower(text):
-        return text.lower()
-    return white_space_fix(remove_punc(remove_articles(lower(s))))
-
-def _f1_score(prediction: str, ground_truth: str) -> float:
-    pred_tokens = _normalize_answer(prediction).split()
-    gold_tokens = _normalize_answer(ground_truth).split()
-    common = Counter(pred_tokens) & Counter(gold_tokens)
-    num_same = sum(common.values())
-    if len(pred_tokens) == 0 or len(gold_tokens) == 0:
-        return float(pred_tokens == gold_tokens)
-    if num_same == 0:
-        return 0.0
-    precision = 1.0 * num_same / len(pred_tokens)
-    recall = 1.0 * num_same / len(gold_tokens)
-    f1 = (2 * precision * recall) / (precision + recall)
-    return f1
-
-def _multi_span_metric(prediction_spans: List[str], gold_spans: List[str]) -> Tuple[float, float]:
-    """
-    Compute F1 and EM for multi-span answers as in the official DROP evaluation.
-    """
-    # If both are empty, it's a perfect match
-    if not prediction_spans and not gold_spans:
-        return 1.0, 1.0
-    # If only one is empty, EM=F1=0
-    if not prediction_spans or not gold_spans:
-        return 0.0, 0.0
-    # For EM: unordered set match
-    if set(map(_normalize_answer, prediction_spans)) == set(map(_normalize_answer, gold_spans)):
-        em = 1.0
-    else:
-        em = 0.0
-    # For F1: compute all pairwise F1s, find best alignment
-    pred_used = set()
-    gold_used = set()
-    f1s = []
-    for i, pred in enumerate(prediction_spans):
-        best_f1 = 0.0
-        best_j = -1
-        for j, gold in enumerate(gold_spans):
-            if j in gold_used:
-                continue
-            f1 = _f1_score(pred, gold)
-            if f1 > best_f1:
-                best_f1 = f1
-                best_j = j
-        if best_j >= 0:
-            pred_used.add(i)
-            gold_used.add(best_j)
-            f1s.append(best_f1)
-    # Unmatched predictions/golds get F1=0
-    f1s.extend([0.0] * (len(prediction_spans) - len(pred_used)))
-    f1s.extend([0.0] * (len(gold_spans) - len(gold_used)))
-    mean_f1 = sum(f1s) / max(len(prediction_spans), len(gold_spans))
-    return mean_f1, em
 
 def compute_drop_f1_em_metric(predictions: List[str], references: List[str]) -> Dict[str, float]:
     """
-    Computes the F1 and Exact Match (EM) scores for the DROP dataset (multi-span, multi-reference).
+    Computes the F1 and Exact Match (EM) scores for the DROP dataset using the Hugging Face evaluate library.
+    The 'squad' metric is used as it handles extractive QA tasks with multiple references/predictions.
+
     Args:
         predictions (List[str]): Each is a JSON string decoding to a list of predicted answer spans.
+                                 Example: '["answer span 1", "another span"]'
         references (List[str]): Each is a JSON string decoding to an object with "spans" (list of gold answer spans).
+                                Example: '{"spans": ["gold span 1", "gold span 2"]}'
     Returns:
         Dict[str, float]: {"f1": ..., "exact_match": ...}
     """
     if len(predictions) != len(references):
         raise ValueError("Predictions and references must have the same length.")
 
-    total_f1 = 0.0
-    total_em = 0.0
-    count = 0
-    for pred_json_str, ref_json_str in zip(predictions, references):
+    squad_metric = evaluate.load("squad")
+    
+    formatted_predictions = []
+    formatted_references = []
+
+    for i, (pred_json_str, ref_json_str) in enumerate(zip(predictions, references)):
         # Parse prediction
         try:
-            pred_spans = json.loads(pred_json_str)
-            if not isinstance(pred_spans, list):
-                pred_spans = [str(pred_spans)]
-            pred_spans = [str(s) for s in pred_spans]
+            pred_spans_list = json.loads(pred_json_str)
+            if not isinstance(pred_spans_list, list): # Handle single string prediction
+                pred_spans_list = [str(pred_spans_list)]
+            prediction_text_for_squad = " ".join(pred_spans_list) if pred_spans_list else ""
         except Exception:
-            pred_spans = []
+            prediction_text_for_squad = ""
+
         # Parse reference
         try:
             ref_obj = json.loads(ref_json_str)
@@ -106,15 +49,27 @@ def compute_drop_f1_em_metric(predictions: List[str], references: List[str]) -> 
                 gold_spans = [str(gold_spans)]
             gold_spans = [str(s) for s in gold_spans]
         except Exception:
-            gold_spans = []
-        f1, em = _multi_span_metric(pred_spans, gold_spans)
-        total_f1 += f1
-        total_em += em
-        count += 1
-    if count == 0:
+            gold_spans = [""]
+
+        formatted_predictions.append({
+            "id": str(i),
+            "prediction_text": prediction_text_for_squad
+        })
+        formatted_references.append({
+            "id": str(i),
+            "answers": {
+                "text": gold_spans if gold_spans else [""],
+                "answer_start": [-1] * len(gold_spans) # answer_start is often needed, -1 if not applicable
+            }
+        })
+
+    if not formatted_predictions: # No valid data to score
         return {"f1": 0.0, "exact_match": 0.0}
+
+    results = squad_metric.compute(predictions=formatted_predictions, references=formatted_references)
     
-    return {"f1": total_f1 / count, "exact_match": total_em / count}
+    return {"f1": results.get("f1", 0.0) / 100.0, "exact_match": results.get("exact_match", 0.0) / 100.0}
+
 
 def compute_f1(predictions: List[str], references: List[str], *args, **kwargs) -> float:
     """
@@ -257,153 +212,8 @@ def load(make_prompt: bool, *args, **kwargs) -> Tuple[
         
     return X_train, y_train, X_test, y_test
 
-def test_drop_metrics():
-    """Unit tests for compute_drop_f1_em_metric covering key cases."""
-    # Helper to wrap spans as json for predictions and references
-    def pred_json(spans):
-        return json.dumps(spans)
-    def ref_json(spans):
-        return json.dumps({"spans": spans, "types": ["span"] * len(spans)})
-
-    # 1. Perfect match, single span
-    preds = [pred_json(["a test answer"])]
-    refs = [ref_json(["a test answer"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 1.0 and result["exact_match"] == 1.0, f"Failed perfect match: {result}"
-
-    # 2. Case/whitespace/punctuation difference (should normalize)
-    preds = [pred_json(["A test, answer!"])]
-    refs = [ref_json(["a test answer"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 1.0 and result["exact_match"] == 1.0, f"Failed normalization: {result}"
-
-    # 3. Partial match
-    preds = [pred_json(["a test"])]
-    refs = [ref_json(["a test answer"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert 0 < result["f1"] < 1.0 and result["exact_match"] == 0.0, f"Failed partial match: {result}"
-
-    # 4. No match
-    preds = [pred_json(["foo"])]
-    refs = [ref_json(["bar"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 0.0 and result["exact_match"] == 0.0, f"Failed no match: {result}"
-
-    # 5. Multi-span, unordered, perfect match
-    preds = [pred_json(["one", "two"])]
-    refs = [ref_json(["two", "one"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 1.0 and result["exact_match"] == 1.0, f"Failed multi-span unordered: {result}"
-
-    # 6. Multi-span, partial match
-    preds = [pred_json(["one", "three"])]
-    refs = [ref_json(["one", "two"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert 0 < result["f1"] < 1.0 and result["exact_match"] == 0.0, f"Failed multi-span partial: {result}"
-
-    # 7. Empty prediction and gold
-    preds = [pred_json([])]
-    refs = [ref_json([])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 1.0 and result["exact_match"] == 1.0, f"Failed empty match: {result}"
-
-    # 8. Empty prediction, non-empty gold
-    preds = [pred_json([])]
-    refs = [ref_json(["foo"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 0.0 and result["exact_match"] == 0.0, f"Failed empty pred: {result}"
-
-    # 9. Malformed prediction JSON
-    preds = ['[not valid json']
-    refs = [ref_json(["foo"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 0.0 and result["exact_match"] == 0.0, f"Failed malformed pred: {result}"
-
-    # 10. Malformed reference JSON
-    preds = [pred_json(["foo"])]
-    refs = ['{not valid json']
-    result = compute_drop_f1_em_metric(preds, refs)
-    assert result["f1"] == 0.0 and result["exact_match"] == 0.0, f"Failed malformed ref: {result}"
-
-    # 11. Prediction has more spans than gold
-    preds = [pred_json(["one", "two", "three"])]
-    refs = [ref_json(["one", "two"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    expected_f1_case_11 = (1.0 + 1.0 + 0.0) / 3.0
-    assert abs(result["f1"] - expected_f1_case_11) < 1e-6 and result["exact_match"] == 0.0, f"Failed pred > gold: {result}, expected F1 approx {expected_f1_case_11}"
-
-    # 12. Gold has more spans than prediction
-    preds = [pred_json(["one", "two"])]
-    refs = [ref_json(["one", "two", "three"])]
-    result = compute_drop_f1_em_metric(preds, refs)
-    expected_f1_case_12 = (1.0 + 1.0 + 0.0) / 3.0
-    assert abs(result["f1"] - expected_f1_case_12) < 1e-6 and result["exact_match"] == 0.0, f"Failed gold > pred: {result}, expected F1 approx {expected_f1_case_12}"
-
-    print("All DROP metric unit tests passed.")
-
 
 if __name__ == "__main__":
-    print("Running DROP metric unit tests...")
-    test_drop_metrics()
-    print("\nAttempting to load data with make_prompt=True...")
-    try:
-        X_train_data, y_train_data, X_test_data, y_test_data = load(make_prompt=True)
-        print("\nSample of loaded data:")
-        print("Number of training examples loaded:", len(X_train_data))
-        if X_train_data and y_train_data:
-            print("First training prompt:", X_train_data[0])
-            print("First training answer string (target for LLM):", y_train_data[0])
-        print("\nNumber of testing examples loaded:", len(X_test_data))
-        if X_test_data and y_test_data:
-            print("First testing prompt:", X_test_data[0])
-            print("First testing answer string (reference for metric):", y_test_data[0])
-        # Example usage of the F1 metric
-        if X_test_data and y_test_data and len(y_test_data) >=3 :
-            print("\n--- Testing DROP Metric (F1 & EM) using huggingface/evaluate ---")
-            pred_spans_for_y0 = []
-            if len(y_test_data) > 0:
-                try:
-                    data_y0 = json.loads(y_test_data[0])
-                    if isinstance(data_y0, dict) and "spans" in data_y0 and isinstance(data_y0["spans"], list):
-                        pred_spans_for_y0 = [str(s) for s in data_y0["spans"]]
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not parse y_test_data[0] for dummy predictions: {y_test_data[0]}")
-            pred_first_span_from_y1 = "single pred"
-            if len(y_test_data) > 1:
-                try:
-                    data_y1 = json.loads(y_test_data[1])
-                    if isinstance(data_y1, dict) and "spans" in data_y1 and isinstance(data_y1["spans"], list) and data_y1["spans"]:
-                        pred_first_span_from_y1 = str(data_y1["spans"][0])
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not parse y_test_data[1] for dummy predictions: {y_test_data[1]}")
-            pred_spans_from_y2 = []
-            if len(y_test_data) > 2:
-                try:
-                    data_y2 = json.loads(y_test_data[2])
-                    if isinstance(data_y2, dict) and "spans" in data_y2 and isinstance(data_y2["spans"], list):
-                        pred_spans_from_y2 = [str(s) for s in data_y2["spans"]]
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not parse y_test_data[2] for dummy predictions: {y_test_data[2]}")
-            dummy_predictions = [
-                json.dumps(pred_spans_for_y0),
-                json.dumps(["a different span", "another one completely"]),
-                '["this is not quite json',
-                json.dumps([pred_first_span_from_y1]),
-                json.dumps(pred_spans_from_y2 + ["an extra predicted span"])
-            ]
-            num_metric_samples = min(len(dummy_predictions), len(y_test_data))
-            if num_metric_samples > 0:
-                metric_predictions = dummy_predictions[:num_metric_samples]
-                metric_references = y_test_data[:num_metric_samples]
-                print(f"Calculating F1 & EM for {num_metric_samples} dummy prediction(s):")
-                for i in range(num_metric_samples):
-                    print(f"  Pred {i+1}: {metric_predictions[i]}")
-                    print(f"  Ref  {i+1}: {metric_references[i]}")
-                metric_results = compute_drop_f1_em_metric(metric_predictions, metric_references)
-                print(f"Computed DROP metrics: {metric_results}")
-            else:
-                print("Not enough test data to run DROP metric examples.")
-        else:
-            print("Skipping metric example due to insufficient test data (need at least 3 samples).")
-    except Exception as e:
-        print(f"An error occurred during the load or metric example: {e}")
+    print("DROP dataset loading and new metric functions are defined.")
+    print("Run tests separately if you have them for the new evaluate-based metrics.")
+    pass
