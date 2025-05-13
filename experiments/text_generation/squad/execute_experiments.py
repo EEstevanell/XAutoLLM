@@ -398,100 +398,72 @@ def main():
         },
     ]
 
-    optimizer = NSPEWarmStartSearch
-    seed = 42
-
-    algorithm_registry = (
-        [
-            FineTuneGenLLMTask,
-            LoraGenLLMTask,
-            PartialFineTuneGenLLMTask,
-        ]
-        + find_classes(include="TEXT_GEN")
-    )
-
-    model = AutoML(
-        input=(Seq[Prompt], Supervised[Seq[GeneratedText]]),
-        output=Seq[GeneratedText],
-        random_state=seed,
-        registry=algorithm_registry,
-        evaluation_timeout=1.5 * Hour,
-        memory_limit=35 * Gb,
-        # multi-objective baseline uses 48 hours for search timeout
-        search_timeout=5 * Hour,
-        cross_validation_steps=1,
-        stratified_cross_validation=False,
-        # Objective functions. Multi-objective experiments use macro_f1_plain and evaluation_time
-        objectives=objectives,
-        # Additional observations for logging
-        observations=[("exact match", drop.compute_exact_match)],
-        # baseline uses original search algorithm
-        search_algorithm=optimizer,
-        # warm_start is None if baseline, otherwise it is the prepared WarmStart object
-        warm_start=warm_start,
-    )
-
-    # Initialize loggers
-    loggers = [
-        ConsoleLogger(),
-        ExperienceLogger(
-            dataset_features=warm_start.current_task_features,
-            system_features=warm_start.current_system_features,
-            dataset_feature_extractor_name="GenerativeTaskFeatureExtractor",
-            system_feature_extractor_name="SystemFeatureExtractor",
-            alias="cnn_dailymail",
-        ),
-    ]
-
     # Run the experiment
     logger.info("Starting CNN/Dailymail experiment")
-    try:
-        start_time = time.time()
-        model.fit(X_train, y_train, logger=loggers)
+    start_time = time.time()
 
-        # Evaluate on test set
-        logger.info("Evaluating best pipeline on test set")
-        predictions = model.predict(X_test)
+    model = FineTuneGenLLMTask(
+        inner_model=TEXT_GEN_Google_T5_T5_Small(),
+        batch_size=8,
+        max_length=2048,
+        learning_rate=5e-06,
+        epochs=1,
+        warmup_steps=2000,
+        weight_decay=0.001,
+        gradient_accumulation_steps=2,
+        lr_scheduler="cosine_with_restarts",
+        use_mixed_precision=True,
+        use_gradient_clipping=False,
+        gradient_clipping_max_norm=0.5,
+        early_stopping_delta=0.001,
+        early_stopping_patience=6,
+        num_workers="default",
+        data_downsize="half",
+        verbose=True,
+    )
 
-        # Calculate metrics
-        em = compute_squad_exact_match(y_test, predictions)
-        f1 = compute_squad_f1(y_test, predictions)
-
-        # Log results
-        logger.info("Test set results:")
-        logger.info(f"Exact Match: {em:.4f}")
-        logger.info(f"F1 Score: {f1:.4f}")
-
-        # Save results to file
-        results_obj = {
-            "experiment_id": EXPERIMENT_ID,
-            "metrics": {
-                "exact_match": float(em),
-                "f1_score": float(f1),
-            },
-            "runtime_seconds": time.time() - start_time,
-            "parameters": {
-                "random_seed": RANDOM_SEED,
-                "time_budget": TIME_BUDGET,
-                "eval_timeout": EVAL_TIMEOUT,
-                "memory_limit": MEMORY_LIMIT,
-                "cross_validation_steps": 1,
-            },
-        }
-        import json
-
-        with open(results_path, "w") as f:
-            json.dump(results_obj, f, indent=2)
-        logger.info(f"Experiment completed in {time.time() - start_time:.2f} seconds")
-        logger.info(f"Results saved to {results_path}")
-        return results_obj
-
-    except Exception as e:
-        logger.error(f"Error during experiment execution: {e}")
-        import traceback
-
-        logger.error(traceback.format_exc())
-        return None
+    len_x = len(X_train[0]) if isinstance(X_train[0], list) else X_train[0].shape[0]
+    indices = np.arange(0, len_x)
+    np.random.shuffle(indices)
+    split_index = int(0.3 * len(indices))
+    train_indices = indices[:-split_index]
+    val_indices = indices[-split_index:]
+                
+    X_train_instances = []
+    X_val_instances = []
+    for Xi in X_train:
+        if isinstance(Xi, list):
+            X_train = [Xi[i] for i in train_indices]
+            X_test = [Xi[i] for i in val_indices]
+        else:
+            X_train = Xi[train_indices]
+            X_test = Xi[val_indices]
+        X_train_instances.append(X_train)
+        X_val_instances.append(X_test)
+    y_train_instances = y_train[train_indices]
+    y_test_instances = y_train[val_indices]
+    
+    # Train model
+    model.train()
+    train_predictions = model.run(X_train_instances, y_train_instances)
+    model.eval()
+    val_predictions = model.run(X_val_instances)
+    logger.info("Training completed")
+    
+    f1 = drop.compute_f1(y_train_instances, train_predictions)
+    em = drop.compute_exact_match(y_train_instances, train_predictions)
+    logger.info(f"Train set results: F1: {f1:.4f}, EM: {em:.4f}")
+    # Evaluate on test set
+    logger.info("Evaluating best pipeline on test set")
+    predictions = model.predict(X_test)
+    # Calculate metrics
+    test_f1 = drop.compute_f1(y_test, predictions)
+    test_em = drop.compute_exact_match(y_test, predictions)
+    
+    # Log results
+    logger.info("Test set results:")
+    logger.info(f"Exact Match: {test_em:.4f}")
+    logger.info(f"F1 Score: {test_f1:.4f}")
 
 if __name__ == "__main__":
     main()
