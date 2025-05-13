@@ -27,6 +27,25 @@ echo "PYTHONPATH (updated): $PYTHONPATH"
 cd "$PROJECT_ROOT_IN_CONTAINER"
 echo "Changed directory to: $(pwd)"
 
+# --- BitsAndBytes Installation ---
+echo "--- Checking and installing bitsandbytes ---"
+if ! python3 -c "import bitsandbytes" > /dev/null 2>&1; then
+    echo "bitsandbytes is not installed. Installing..."
+    # Determine CUDA version
+    CUDA_VERSION=$(nvcc --version | grep "release" | awk '{print $5}' | cut -d',' -f1)
+
+    if [[ "$CUDA_VERSION" == "12.8"* || "$CUDA_VERSION" == "12.9"* ]]; then
+        echo "CUDA 12.8 or 12.9 detected. Installing compatible bitsandbytes."
+        pip install bitsandbytes
+    else
+        echo "CUDA version $CUDA_VERSION detected. Installing bitsandbytes (may require manual configuration)."
+        pip install bitsandbytes
+    fi
+else
+    echo "bitsandbytes is already installed."
+fi
+echo "---------------------------------------------"
+
 echo "Executing Python experiment script: $EXPERIMENT_PYTHON_SCRIPT"
 python3 "$EXPERIMENT_PYTHON_SCRIPT" "$@"
 
