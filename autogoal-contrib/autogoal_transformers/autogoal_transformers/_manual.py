@@ -57,6 +57,8 @@ import transformers
 from transformers import (
     AutoModelForSequenceClassification,
     AutoConfig,
+    AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM
 )
 import logging
 from sklearn.model_selection import train_test_split
@@ -1606,131 +1608,74 @@ class FineTunerGenBase(AlgorithmBase):
         self.max_new_tokens = None  # Will be set after model/tokenizer is loaded
         self.data_downsize = data_downsize
         self.quantization = quantization
+        
+        # Prepare logger once
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            h = logging.StreamHandler()
+            h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            self.logger.addHandler(h)
 
+    
     def init_model(self):
-        """Initialize tokenizer and generative model (seq2seq or causal) for finetuning or generation.
-        Ensures compatibility with all models and suppresses flash-attention warnings by using attn_implementation="eager" if possible.
-        """
-        # Avoid reinitialization if already initialized
-        if (
-            getattr(self, "model", None) is not None
-            and getattr(self, "tokenizer", None) is not None
-        ):
+        if self.model is not None and self.tokenizer is not None:
             return
 
         model_name = self.inner_model.name
-        print(f"Initializing generative model: {model_name}")
-        assert isinstance(model_name, str), "Model name must be a string"
-        # Load config
-        self.config = AutoConfig.from_pretrained(
-            model_name,
-            hidden_dropout_prob=(
-                self.dropout_rate if hasattr(self, "dropout_rate") else 0
-            ),
-            attention_probs_dropout_prob=(
-                self.dropout_rate if hasattr(self, "dropout_rate") else 0
-            ),
-            trust_remote_code=True,
-        )
-        # Load tokenizer
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-        except Exception as e:
-            print(f"Error loading tokenizer for model '{model_name}': {e}")
-            raise
-        # Determine model type: seq2seq or causal LM
+        self.logger.info(f"Initializing model `{model_name}`")
+
+        # BitsAndBytes quantization
+        bnb_cfg = None
+        if self.quantization != "none" and self.device.type == "cuda":
+            from transformers import BitsAndBytesConfig
+
+            if self.quantization == "bnb-8bit":
+                bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
+            elif self.quantization == "bnb-4bit":
+                bnb_cfg = BitsAndBytesConfig(
+                    load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16
+                )
+
+        # Load config + tokenizer
+        self.config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         self.is_encoder_decoder = getattr(self.config, "is_encoder_decoder", False)
-        # --- BitsAndBytes quantization support ---
-        quantization_config = None
-        if self.quantization != "none":
-            try:
-                from transformers import BitsAndBytesConfig
-                if self.device.type != "cuda":
-                    print("[WARN] Quantization requested but CUDA is not available. Proceeding without quantization.")
-                else:
-                    if self.quantization == "bnb-8bit":
-                        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-                    elif self.quantization == "bnb-4bit":
-                        quantization_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16)
-            except ImportError:
-                print("[WARN] BitsAndBytes is not available. Proceeding without quantization.")
-        try:
-            if self.is_encoder_decoder:
-                from transformers import AutoModelForSeq2SeqLM
-                self.model = safe_model_from_pretrained(
-                    AutoModelForSeq2SeqLM,
-                    model_name,
-                    config=self.config,
-                    trust_remote_code=True,
-                    quantization_config=quantization_config,
-                )
-            else:
-                from transformers import AutoModelForCausalLM
-                self.model = safe_model_from_pretrained(
-                    AutoModelForCausalLM,
-                    model_name,
-                    config=self.config,
-                    trust_remote_code=True,
-                    quantization_config=quantization_config,
-                )
-        except Exception as e:
-            print(f"Error loading generative model for '{model_name}': {e}")
-            raise
-        # Move model to device
+
+        # Load model (with device_map for quantized)
+        kwargs = {"config": self.config, "trust_remote_code": True}
+        if bnb_cfg:
+            kwargs["quantization_config"] = bnb_cfg
+            kwargs["device_map"] = "auto"
+
+        cls = AutoModelForSeq2SeqLM if self.is_encoder_decoder else AutoModelForCausalLM
+        self.model = safe_model_from_pretrained(cls, model_name, **kwargs)
+
+        # Move to device
         self.model.to(self.device)
-        # For decoder-only models, ensure left padding
+        # Enable gradient checkpointing
+        self.model.gradient_checkpointing_enable()
+        # Optionally compile (PyTorch >= 2.0)
+        try:
+            self.model = torch.compile(self.model)
+        except Exception:
+            pass
+
+        # Padding side
         if not self.is_encoder_decoder:
+            self.tokenizer.padding_side = "left"
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
-            self.tokenizer.padding_side = "left"
         else:
             self.tokenizer.padding_side = "right"
 
-        # Robustly determine the model's context window for all HuggingFace generative models
-        context_window = None
-        # Try all common config attributes
-        for attr in [
-            "n_positions",
-            "max_position_embeddings",
-            "seq_length",
-            "max_seq_len",
-            "max_sequence_length",
-            "max_position_ids",
-            "max_length",
-        ]:
-            value = getattr(self.model.config, attr, None)
-            if isinstance(value, int) and value > 0:
-                context_window = value
-                break
-
-        # Try tokenizer.model_max_length if not found
-        if context_window is None:
-            value = getattr(self.tokenizer, "model_max_length", None)
-            # Some tokenizers use 1e30 or higher as 'infinite', which is not valid
-            if isinstance(value, int) and value > 0 and value < 1e9:
-                context_window = value
-
-        # Try model.config.max_length if not found
-        if context_window is None:
-            value = getattr(self.model.config, "max_length", None)
-            if isinstance(value, int) and value > 0:
-                context_window = value
-
-        # Fallback to 1024 and warn
-        if context_window is None:
-            context_window = 1024
-            if self.verbose:
-                print(
-                    "[WARN] Could not determine model context window from config or tokenizer. Using fallback value 1024."
-                )
-
-        # Now, cap self.max_length at context_window [1]
-        if self.max_length > context_window:
-            self.max_length = context_window
-
-        # Ensure max_length is at least 1, as some logic might depend on it being positive.
-        self.max_length = max(1, self.max_length)
+        # Determine context window and cap max_length
+        cw = (
+            self.config.max_position_embeddings
+            if hasattr(self.config, "max_position_embeddings")
+            else 1024
+        )
+        self.max_length = min(self.max_length, cw)
 
     def print_trainable_parameters(self):
         if hasattr(self.model, "print_trainable_parameters"):
@@ -1929,14 +1874,16 @@ class FineTunerGenBase(AlgorithmBase):
                 # Dynamic padding: pad to the longest in batch
                 model_inputs = self.tokenizer(
                     inputs,
-                    padding=True,  # dynamic padding
+                    padding="longest",  # dynamic padding
                     truncation=True,
+                    max_length=self.max_length,
                     return_tensors="pt"
                 )
                 labels = self.tokenizer(
                     targets,
-                    padding=True,  # dynamic padding
+                    padding="longest",  # dynamic padding
                     truncation=True,
+                    max_length=self.max_length,
                     return_tensors="pt"
                 )["input_ids"]
                 labels[labels == self.tokenizer.pad_token_id] = -100
@@ -1949,8 +1896,9 @@ class FineTunerGenBase(AlgorithmBase):
                 texts = [p + c for p, c in zip(prompts, completions)]
                 model_inputs = self.tokenizer(
                     texts,
-                    padding=True,  # dynamic padding
+                    padding="longest",  # dynamic padding
                     truncation=True,
+                    max_length=self.max_length,
                     return_tensors="pt"
                 )
                 labels = model_inputs["input_ids"].clone()
@@ -2000,7 +1948,7 @@ class FineTunerGenBase(AlgorithmBase):
         total_steps = len(train_loader) * self.epochs
         scheduler = self._setup_scheduler(optimizer, total_steps)
         scaler = (
-            torch.amp.GradScaler()
+            torch.amp.GradScaler(device=self.device.type, enabled=self.use_mixed_precision)
             if self.use_mixed_precision and self.device.type == "cuda"
             else None
         )
@@ -2041,81 +1989,64 @@ class FineTunerGenBase(AlgorithmBase):
             failed_batches = 0
             running_loss = 0.0
             for step, batch in enumerate(batch_iter):
-                retry_count = 0
-                while retry_count < 3:
-                    try:
-                        batch = {
-                            k: v.to(self.device, non_blocking=True)
-                            for k, v in batch.items()
-                        }
-                        if "labels" in batch:
-                            batch["labels"] = (
-                                batch["labels"]
-                                .clone()
-                                .detach()
-                                .to(self.device, non_blocking=True)
-                            )
-                        if self.use_mixed_precision and scaler is not None:
-                            with torch.amp.autocast(device_type=self.device.type):
-                                outputs = self.model(**batch)
-                                loss = outputs.loss
-                        else:
+                try:
+                    batch = {
+                        k: v.to(self.device, non_blocking=True)
+                        for k, v in batch.items()
+                    }
+                    if "labels" in batch:
+                        batch["labels"] = (
+                            batch["labels"]
+                            .clone()
+                            .detach()
+                            .to(self.device, non_blocking=True)
+                        )
+                    if self.use_mixed_precision and scaler is not None:
+                        with torch.amp.autocast(device_type=self.device.type):
                             outputs = self.model(**batch)
                             loss = outputs.loss
-                        loss = loss / self.gradient_accumulation_steps
-                        if self.use_mixed_precision and scaler is not None:
-                            scaler.scale(loss).backward()
-                        else:
-                            loss.backward()
-                        if (step + 1) % self.gradient_accumulation_steps == 0 or (
-                            step + 1
-                        ) == n_batches:
-                            if self.use_gradient_clipping:
-                                if self.use_mixed_precision and scaler is not None:
-                                    scaler.unscale_(optimizer)
-                                torch.nn.utils.clip_grad_norm_(
-                                    self.model.parameters(),
-                                    max_norm=self.gradient_clipping_max_norm,
-                                )
+                    else:
+                        outputs = self.model(**batch)
+                        loss = outputs.loss
+                    loss = loss / self.gradient_accumulation_steps
+                    if self.use_mixed_precision and scaler is not None:
+                        scaler.scale(loss).backward()
+                    else:
+                        loss.backward()
+                    if (step + 1) % self.gradient_accumulation_steps == 0 or (
+                        step + 1
+                    ) == n_batches:
+                        if self.use_gradient_clipping:
                             if self.use_mixed_precision and scaler is not None:
-                                scaler.step(optimizer)
-                                scaler.update()
-                            else:
-                                optimizer.step()
-                            scheduler.step()
-                            optimizer.zero_grad()
-                        total_loss += (
-                            loss.detach().item() * self.gradient_accumulation_steps
-                        )
-                        # Update running loss for tqdm
-                        running_loss = 0.95 * running_loss + 0.05 * loss.item() if step > 0 else loss.item()
-                        if self.verbose and hasattr(batch_iter, "set_postfix"):
-                            batch_iter.set_postfix(loss=f"{running_loss:.4f}")
-                        break  # Success, break retry loop
-                    except Exception as batch_exc:
-                        retry_count += 1
-                        logger.error(
-                            f"Exception in training batch (epoch {epoch+1}, batch {step+1}), attempt {retry_count}: {batch_exc}"
-                        )
-                        import traceback
-
-                        logger.error(traceback.format_exc())
-                        if self.device.type == "cuda":
-                            torch.cuda.empty_cache()
-                        gc.collect()
-                        if retry_count >= 3:
-                            logger.error(
-                                f"Batch (epoch {epoch+1}, batch {step+1}) failed after 3 attempts. Skipping batch."
+                                scaler.unscale_(optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.parameters(),
+                                max_norm=self.gradient_clipping_max_norm,
                             )
-                            failed_batches += 1
-                            if failed_batches >= 2:
-                                logger.error(
-                                    f"Aborting training: {failed_batches} batches failed in epoch {epoch+1}. Training stopped."
-                                )
-                                raise batch_exc
-                            break
+                        if self.use_mixed_precision and scaler is not None:
+                            scaler.step(optimizer)
+                            scaler.update()
                         else:
-                            continue
+                            optimizer.step()
+                        scheduler.step()
+                        optimizer.zero_grad()
+                    total_loss += (
+                        loss.detach().item() * self.gradient_accumulation_steps
+                    )
+                    # Update running loss for tqdm
+                    running_loss = 0.95 * running_loss + 0.05 * loss.item() if step > 0 else loss.item()
+                    if self.verbose and hasattr(batch_iter, "set_postfix"):
+                        batch_iter.set_postfix(loss=f"{running_loss:.4f}")
+                except Exception as batch_exc:
+                    logger.error(
+                        f"Batch (epoch {epoch+1}, batch {step+1}). Skipping batch."
+                    )
+                    failed_batches += 1
+                    if failed_batches >= 2:
+                        logger.error(
+                            f"Aborting training: {failed_batches} batches failed in epoch {epoch+1}. Training stopped."
+                        )
+                        raise batch_exc
 
                 # Validation at scheduled steps
                 if (step + 1) in val_steps:
@@ -2292,13 +2223,13 @@ class FineTunerGenBase(AlgorithmBase):
                     # We need to slice the output_ids to get only the generated tokens.
                     num_input_tokens = input_ids.shape[1]
 
-                    if output_ids.shape[1] > num_input_tokens:
+                    if not self.is_encoder_decoder:
                         generated_ids_only = output_ids[:, num_input_tokens:]
                     else:
                         # No new tokens generated, or output is shorter than input (should not happen with proper generate call)
                         # logger.warning(f"Batch {step+1}: No new tokens generated or output_ids shorter than input_ids. ")
                         generated_ids_only = output_ids
-
+                        
                     decoded_answers = self.tokenizer.batch_decode(
                         generated_ids_only, skip_special_tokens=True
                     )
