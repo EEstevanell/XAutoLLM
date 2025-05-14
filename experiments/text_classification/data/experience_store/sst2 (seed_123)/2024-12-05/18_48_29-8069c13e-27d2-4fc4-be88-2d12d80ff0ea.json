@@ -97,9 +97,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-12-05 18:48:29",
     "alias": "sst2_id:9-rd:123 (rnd:123)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "CUDA out of memory. Tried to allocate 3.00 GiB. GPU 1 has a total capacity of 23.64 GiB of which 1.76 GiB is free. Process 2957429 has 162.00 MiB memory in use. Process 3181566 has 21.73 GiB memory in use. Of the allocated memory 20.11 GiB is allocated by PyTorch, and 1.42 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)"
+    "error": "CUDA out of memory. Tried to allocate 3.00 GiB. GPU 1 has a total capacity of 23.64 GiB of which 1.76 GiB is free. Process 2957429 has 162.00 MiB memory in use. Process 3181566 has 21.73 GiB memory in use. Of the allocated memory 20.11 GiB is allocated by PyTorch, and 1.42 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

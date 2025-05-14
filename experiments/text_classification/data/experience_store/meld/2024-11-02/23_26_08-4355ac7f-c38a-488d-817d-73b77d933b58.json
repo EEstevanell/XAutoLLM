@@ -106,9 +106,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-11-02 23:26:08",
     "alias": "meld",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "DataLoader worker (pid 1335588) is killed by signal: Bus error. It is possible that dataloader's workers are out of shared memory. Please try to raise your shared memory limit."
+    "error": "DataLoader worker (pid 1335588) is killed by signal: Bus error. It is possible that dataloader's workers are out of shared memory. Please try to raise your shared memory limit.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

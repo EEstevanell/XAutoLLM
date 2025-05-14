@@ -100,9 +100,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-02 12:20:36",
     "alias": "meld_warmstart_id:(f-pos + a-neg)-rd:42 (rn:42)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "mat1 and mat2 shapes cannot be multiplied (2048x1280 and 3840x17)"
+    "error": "mat1 and mat2 shapes cannot be multiplied (2048x1280 and 3840x17)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

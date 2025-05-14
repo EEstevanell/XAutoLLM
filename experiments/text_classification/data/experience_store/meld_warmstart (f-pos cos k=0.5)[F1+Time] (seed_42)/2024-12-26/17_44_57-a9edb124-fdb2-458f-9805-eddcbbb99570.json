@@ -85,9 +85,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-12-26 17:44:57",
     "alias": "meld_warmstart_id:(f-pos cos k=0.5)[F1+Time]-rd:42 (rn:42)",
-    "accuracy": 0.1309380637402285,
     "cross_val_steps": null,
-    "f1": 0.04569497125471225,
-    "evaluation_time": 143.66227853298187,
-    "error": null
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.1309380637402285
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.04569497125471225
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 143.66227853298187
+        }
+    ]
 }

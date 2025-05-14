@@ -85,9 +85,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-30 01:37:36",
     "alias": "meld_warmstart_id:(no-pos a-neg)[F1+Time][weighted_sum]-rd:42 (rn:42)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "We couldn't connect to 'https://huggingface.co' to load this file, couldn't find it in the cached files and it looks like mistralai/Mixtral-8x7B-Instruct-v0.1 is not the path to a directory containing a file named config.json.\nCheckout your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'."
+    "error": "We couldn't connect to 'https://huggingface.co' to load this file, couldn't find it in the cached files and it looks like mistralai/Mixtral-8x7B-Instruct-v0.1 is not the path to a directory containing a file named config.json.\nCheckout your internet connection or see how to run the library in offline mode at 'https://huggingface.co/docs/transformers/installation#offline-mode'.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

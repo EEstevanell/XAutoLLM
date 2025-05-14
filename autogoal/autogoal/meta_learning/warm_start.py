@@ -174,7 +174,6 @@ class WarmStart:
         print(f"Feature weights: TaskMeta={self.task_meta_weight}, Semantic={self.semantic_weight}, System={self.system_weight}")
         print(f"Distance for Meta/System: {self.distance_metric.__class__.__name__}, Distance for Semantic: {self.semantic_distance_metric.__class__.__name__}")
 
-
     def _process_metrics(self, metrics):
         """
         Process the user input for metrics and return a list of MetricSpec objects with maximize inferred from experiences.
@@ -680,40 +679,21 @@ class WarmStart:
         """
         Filters experiences to include only those that:
         - Used the same feature extractors as the current configuration.
-        - Contain all required metrics as specified in self.metrics.
-        For negative/error experiences, if no metrics are specified, allow inclusion if error is present.
 
         Parameters:
             experiences (List[Experience]): A list of past experiences.
 
         Returns:
-            List[Experience]: A list of experiences that used the same feature extractors and have all required metrics (or error for negative).
+            List[Experience]: A list of experiences that used the same feature extractors.
         """
         dataset_extractor_name = self.dataset_feature_extractor_class.__name__
         system_extractor_name = self.system_feature_extractor_class.__name__
-        required_metric_names = {m.name for m in self.metrics}
-
-        def has_all_required_metrics(exp):
-            if required_metric_names:
-                # exp.metrics may be None, a list of Metric or dict
-                if not exp.metrics:
-                    return False
-                found = set()
-                for m in exp.metrics:
-                    if hasattr(m, "name"):
-                        found.add(m.name)
-                    elif isinstance(m, dict) and "name" in m:
-                        found.add(m["name"])
-                return required_metric_names.issubset(found)
-            # If no metrics specified ignore the experience
-            return False
 
         filtered_experiences = [
             exp
             for exp in experiences
             if exp.dataset_feature_extractor_name == dataset_extractor_name
             and exp.system_feature_extractor_name == system_extractor_name
-            and has_all_required_metrics(exp)
         ]
 
         return filtered_experiences

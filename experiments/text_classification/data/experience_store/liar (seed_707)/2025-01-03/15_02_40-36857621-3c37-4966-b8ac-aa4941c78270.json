@@ -100,9 +100,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-03 15:02:40",
     "alias": "liar_id:9-rd:707 (rn:707)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "mat1 and mat2 shapes cannot be multiplied (131072x1024 and 3072x10)"
+    "error": "mat1 and mat2 shapes cannot be multiplied (131072x1024 and 3072x10)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

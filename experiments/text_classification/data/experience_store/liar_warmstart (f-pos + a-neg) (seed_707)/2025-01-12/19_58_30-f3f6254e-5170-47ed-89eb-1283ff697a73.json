@@ -85,9 +85,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-12 19:58:30",
     "alias": "liar_warmstart_id:(f-pos + a-neg)-rd:707 (rn:707)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "DataLoader worker (pid(s) 464724) exited unexpectedly"
+    "error": "DataLoader worker (pid(s) 464724) exited unexpectedly",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

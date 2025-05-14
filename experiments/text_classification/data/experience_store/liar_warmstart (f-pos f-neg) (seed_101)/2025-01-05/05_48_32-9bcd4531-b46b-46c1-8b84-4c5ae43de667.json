@@ -97,9 +97,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-05 05:48:32",
     "alias": "liar_warmstart_id:(f-pos f-neg)-rd:101 (rn:101)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "You are trying to access a gated repo.\nMake sure to have access to it at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1.\n401 Client Error. (Request ID: Root=1-677a1ca2-6c02b45164ea1dcd79b4062f;f3b07088-0f13-4963-a027-c6188d20825c)\n\nCannot access gated repo for url https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/resolve/main/config.json.\nAccess to model mistralai/Mistral-7B-Instruct-v0.1 is restricted. You must have access to it and be authenticated to access it. Please log in."
+    "error": "You are trying to access a gated repo.\nMake sure to have access to it at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1.\n401 Client Error. (Request ID: Root=1-677a1ca2-6c02b45164ea1dcd79b4062f;f3b07088-0f13-4963-a027-c6188d20825c)\n\nCannot access gated repo for url https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/resolve/main/config.json.\nAccess to model mistralai/Mistral-7B-Instruct-v0.1 is restricted. You must have access to it and be authenticated to access it. Please log in.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

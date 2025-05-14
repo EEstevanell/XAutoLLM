@@ -97,9 +97,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-01 15:08:55",
     "alias": "meld_id:9-rd:2024 (rn:2024)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "Unable to load weights from pytorch checkpoint file for '/home/coder/autogoal/autogoal-contrib/autogoal_transformers/autogoal_transformers/models--google-t5--t5-11b/snapshots/90f37703b3334dfe9d2b009bfcbfbf1ac9d28ea3/pytorch_model.bin' at '/home/coder/autogoal/autogoal-contrib/autogoal_transformers/autogoal_transformers/models--google-t5--t5-11b/snapshots/90f37703b3334dfe9d2b009bfcbfbf1ac9d28ea3/pytorch_model.bin'. If you tried to load a PyTorch model from a TF 2.0 checkpoint, please set from_tf=True."
+    "error": "Unable to load weights from pytorch checkpoint file for '/home/coder/autogoal/autogoal-contrib/autogoal_transformers/autogoal_transformers/models--google-t5--t5-11b/snapshots/90f37703b3334dfe9d2b009bfcbfbf1ac9d28ea3/pytorch_model.bin' at '/home/coder/autogoal/autogoal-contrib/autogoal_transformers/autogoal_transformers/models--google-t5--t5-11b/snapshots/90f37703b3334dfe9d2b009bfcbfbf1ac9d28ea3/pytorch_model.bin'. If you tried to load a PyTorch model from a TF 2.0 checkpoint, please set from_tf=True.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

@@ -82,9 +82,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-02-01 09:30:28",
     "alias": "ag_news_warmstart_id:(f-pos + a-neg)[F1+Time][logarithmic_front]-rd:42 (rn:42)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "Exceeded allowed time for execution. The process was terminated after 5400.0 seconds."
+    "error": "Exceeded allowed time for execution. The process was terminated after 5400.0 seconds.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

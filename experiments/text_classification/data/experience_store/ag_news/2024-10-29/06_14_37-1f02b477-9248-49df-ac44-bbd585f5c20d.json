@@ -91,9 +91,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-10-29 06:14:37",
     "alias": "ag_news",
-    "accuracy": 0.9026388888888889,
     "cross_val_steps": null,
-    "f1": 0.9026057897316644,
-    "evaluation_time": 424.6048105955124,
-    "error": null
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.9026388888888889
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.9026057897316644
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 424.6048105955124
+        }
+    ]
 }

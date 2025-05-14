@@ -715,7 +715,7 @@ class FineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -896,7 +896,7 @@ class PartialFineTuneLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1178,7 +1178,7 @@ class LoraLLMEmbeddingClassifier(FineTunerBase):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
     ):
         self.model = None
         self.tokenizer = None
@@ -1420,7 +1420,7 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
     ):
         super().__init__(
@@ -1469,7 +1469,7 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         use_gradient_clipping: BooleanValue(),  # type: ignore
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
     ):
         super().__init__(
@@ -1572,9 +1572,9 @@ class FineTunerGenBase(AlgorithmBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
+        quantization: CategoricalValue("none") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__()
@@ -2118,156 +2118,148 @@ class FineTunerGenBase(AlgorithmBase):
         self.model.train()
         return avg_loss, perplexity
 
-    def predict(self, X):
-        """Generate texts for input prompts X using the loaded generative model, with tqdm/logging progress bar and optimal generation settings."""
-        # Prepare dataset and dataloader
-        # Use minimal dataset and tokenizer's built-in padding for prediction
-        if self.is_encoder_decoder:
-            dataset = [{"input": inp} for inp in X]
+    def _find_max_inference_batch_size(self, sample_inputs, max_test_bs: int = 512) -> int:
+        """
+        Binary search to find the largest batch size that fits in GPU memory.
 
-            def predict_collate(batch):
-                inputs = [item["input"] for item in batch]
+        Args:
+            sample_inputs: A dict of tensors for a single-sample batch.
+            max_test_bs: Upper bound for batch size search.
+
+        Returns:
+            The maximum batch size that does not trigger an OOM error.
+        """
+        lo, hi = 1, max_test_bs
+        best = 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            try:
+                # Replicate inputs to test batch size `mid`
+                test_inputs = {
+                    k: v[:1].repeat(mid, *[1] * (v.ndim - 1)).to(self.device)
+                    for k, v in sample_inputs.items()
+                }
+                with torch.inference_mode():
+                    _ = self.model.generate(
+                        input_ids=test_inputs.get('input_ids'),
+                        attention_mask=test_inputs.get('attention_mask'),
+                        max_new_tokens=1,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                    )
+                best = mid
+                lo = mid + 1
+            except RuntimeError as e:
+                if 'out of memory' in str(e):
+                    torch.cuda.empty_cache()
+                    hi = mid - 1
+                else:
+                    raise
+        return best
+    
+    def predict(self, X):
+        """
+        Generate texts for input prompts X using optimized inference settings:
+        - Auto-detects maximal inference batch size via binary search
+        - Uses torch.inference_mode and FP16 model
+        - Disables gradient checkpointing and uses DataLoader parallelism
+        """
+        # Prepare minimal dataset for sampling
+        if self.is_encoder_decoder:
+            dataset = [{'input': inp} for inp in X]
+            def collate_fn(batch):
+                inputs = [item['input'] for item in batch]
                 return self.tokenizer(
                     inputs,
                     max_length=self.max_length,
                     padding=True,
                     truncation=True,
-                    return_tensors="pt",
+                    return_tensors='pt',
                 )
-
         else:
-            dataset = [{"prompt": inp} for inp in X]
-
-            def predict_collate(batch):
-                prompts = [item["prompt"] for item in batch]
+            dataset = [{'prompt': inp} for inp in X]
+            def collate_fn(batch):
+                texts = [item['prompt'] for item in batch]
                 return self.tokenizer(
-                    prompts,
+                    texts,
                     max_length=self.max_length,
                     padding=True,
                     truncation=True,
-                    return_tensors="pt",
+                    return_tensors='pt',
                 )
 
+        # Switch to eval and disable training-specific features
         self.model.eval()
+        if hasattr(self.model, 'gradient_checkpointing_disable'):
+            try:
+                self.model.gradient_checkpointing_disable()
+            except Exception:
+                pass
+
         results = []
-        logger = logging.getLogger("autogoal.predict")
+
+        # Setup logger
+        logger = logging.getLogger('autogoal.predict')
         logger.setLevel(logging.INFO)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            handler.setFormatter(
-                logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-            )
+            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
             logger.addHandler(handler)
 
-        # --- LoRA Specific: Ensure adapters are enabled for PEFT models ---
-        # This check makes the method robust for both LoRA and non-LoRA models.
-        if hasattr(self.model, "enable_adapters") and callable(
-            getattr(self.model, "enable_adapters")
-        ):
+        # Enable LoRA adapters if present
+        if hasattr(self.model, 'enable_adapters') and callable(self.model.enable_adapters):
             try:
-                logger = logging.getLogger("autogoal.predict")  # Get logger instance
-                logger.info("Attempting to enable LoRA adapters for prediction.")
+                logger.info('Enabling LoRA adapters for inference.')
                 self.model.enable_adapters()
             except Exception as e:
-                logger = logging.getLogger("autogoal.predict")
-                logger.warning(
-                    f"Could not enable LoRA adapters, proceeding without explicit enable. Error: {e}"
+                pass
+
+        # Determine worst-case sample via character length
+        # Heuristic: pick input with max characters
+        lengths = [len(inp) for inp in X]
+        max_idx = int(max(range(len(lengths)), key=lambda i: lengths[i]))
+        worst_sample = dataset[max_idx:max_idx+1]
+        sample_inputs = collate_fn(worst_sample)
+        sample_inputs = {k: v.to(self.device, non_blocking=True) for k, v in sample_inputs.items()}
+        self.inference_batch_size = self._find_max_inference_batch_size(sample_inputs)
+        logger.info(f'Inferred worst-case inference_batch_size={self.inference_batch_size}')
+
+        # Create DataLoader for full inference
+        infer_loader = DataLoader(
+            dataset,
+            batch_size=self.inference_batch_size,
+            shuffle=False,
+            num_workers=self._get_num_workers(),
+            pin_memory=(self.device.type == 'cuda'),
+            prefetch_factor=2 if self._get_num_workers() > 0 else None,
+            persistent_workers=self._get_num_workers() > 0,
+            collate_fn=collate_fn,
+        )
+
+        # Perform generation under inference_mode for max speed
+        for batch in tqdm(infer_loader, desc='Predicting', disable=not self.verbose):
+            inputs = {
+                k: v.to(self.device, non_blocking=True)
+                for k, v in batch.items()
+            }
+            eos = self.tokenizer.eos_token_id or self.tokenizer.pad_token_id
+            with torch.inference_mode():
+                output_ids = self.model.generate(
+                    input_ids=inputs.get('input_ids'),
+                    attention_mask=inputs.get('attention_mask'),
+                    max_new_tokens=self.max_new_tokens or 25,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=eos,
                 )
 
-        # Best practices for prediction: pin_memory, non_blocking, autocast, error handling, and logging
-        use_amp = self.use_mixed_precision and self.device.type == "cuda"
-        pin_memory_flag = self.device.type == "cuda"
-        num_workers = self._get_num_workers()
-        try:
-            dataloader = DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=num_workers,
-                pin_memory=pin_memory_flag,
-                prefetch_factor=(2 if num_workers > 0 else None),
-                persistent_workers=(num_workers > 0),
-                collate_fn=predict_collate,
-            )
-        except (RuntimeError, OSError, NotImplementedError) as e:
-            logger.warning(
-                f"DataLoader worker error in predict ({e}), falling back to num_workers=0."
-            )
-            dataloader = DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=0,
-                pin_memory=pin_memory_flag,
-                collate_fn=predict_collate,
-            )
-        batch_iter = tqdm(
-            dataloader,
-            total=len(dataloader),
-            desc="Predicting",
-            unit="batch",
-            leave=True,
-            disable=not self.verbose,
-        )
-        with torch.no_grad():
-            for step, batch in enumerate(batch_iter):
-                try:
-                    # Use non_blocking transfer for CUDA, and ensure all tensors are on the correct device
-                    inputs = {
-                        k: v.to(self.device, non_blocking=pin_memory_flag)
-                        for k, v in batch.items()
-                        if k != "labels"
-                    }
-                    input_ids = inputs.get("input_ids")
-                    # Set a hard cap for max_new_tokens for safety
-                    max_new_tokens = (
-                        self.max_new_tokens
-                        if self.max_new_tokens is not None and self.max_new_tokens != 0
-                        else 25
-                    )
-                    eos_token_id = self.tokenizer.eos_token_id
-                    if eos_token_id is None and self.tokenizer.pad_token_id is not None:
-                        logger.warning(
-                            "eos_token_id is None. Using pad_token_id as eos_token_id for generation."
-                        )
-                        eos_token_id = self.tokenizer.pad_token_id
+            # Decode new tokens
+            if not self.is_encoder_decoder:
+                gen = output_ids[:, inputs['input_ids'].size(1):]
+            else:
+                gen = output_ids
+            decoded = self.tokenizer.batch_decode(gen, skip_special_tokens=True)
+            results.extend(decoded)
 
-                    with torch.amp.autocast(
-                        device_type=self.device.type, enabled=use_amp
-                    ):
-                        output_ids = self.model.generate(
-                            input_ids=input_ids,
-                            attention_mask=inputs.get("attention_mask"),
-                            max_new_tokens=max_new_tokens,
-                            pad_token_id=self.tokenizer.pad_token_id,
-                            eos_token_id=eos_token_id,
-                        )
-                    # --- Decode only the generated part for Causal LMs ---
-                    # The input_ids are part of the output_ids for causal LMs.
-                    # We need to slice the output_ids to get only the generated tokens.
-                    num_input_tokens = input_ids.shape[1]
-
-                    if not self.is_encoder_decoder:
-                        generated_ids_only = output_ids[:, num_input_tokens:]
-                    else:
-                        # No new tokens generated, or output is shorter than input (should not happen with proper generate call)
-                        # logger.warning(f"Batch {step+1}: No new tokens generated or output_ids shorter than input_ids. ")
-                        generated_ids_only = output_ids
-
-                    decoded_answers = self.tokenizer.batch_decode(
-                        generated_ids_only, skip_special_tokens=True
-                    )
-                    results.extend(decoded_answers)
-
-                except Exception as e:
-                    logger.error(f"Exception in prediction batch {step+1}: {e}")
-                    logger.error(traceback.format_exc())
-                    if self.device.type == "cuda":
-                        torch.cuda.empty_cache()
-                    import gc
-
-                    gc.collect()
-                    raise e  # Re-raise the exception to stop execution or handle upstream
         return results
 
     def run(
@@ -2315,9 +2307,9 @@ class PartialFineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
+        quantization: CategoricalValue("none") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2433,9 +2425,9 @@ class LoraGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
+        quantization: CategoricalValue("none") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(
@@ -2586,9 +2578,9 @@ class FineTuneGenLLMTask(FineTunerGenBase):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         early_stopping_delta: CategoricalValue(0.001, 0.005, 0.01),  # type: ignore
         early_stopping_patience: DiscreteValue(1, 10),  # type: ignore
-        num_workers: CategoricalValue("default", "16"),  # type: ignore
+        num_workers: CategoricalValue("default"),  # type: ignore
         data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
-        quantization: CategoricalValue("none", "bnb-8bit", "bnb-4bit") = "none",  # type: ignore
+        quantization: CategoricalValue("none") = "none",  # type: ignore
         verbose: BooleanValue() = True,  # type: ignore
     ):
         super().__init__(

@@ -106,9 +106,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-11-02 20:59:00",
     "alias": "meld",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "Unrecognized configuration class <class 'transformers_modules.microsoft.Phi-3-medium-4k-instruct.ae004ae82eb6eddc32906dfacb1d6dfea8f91996.configuration_phi3.Phi3Config'> for this kind of AutoModel: AutoModelForSequenceClassification.\nModel type should be one of AlbertConfig, BartConfig, BertConfig, BigBirdConfig, BigBirdPegasusConfig, BioGptConfig, BloomConfig, CamembertConfig, CanineConfig, LlamaConfig, ConvBertConfig, CTRLConfig, Data2VecTextConfig, DebertaConfig, DebertaV2Config, DistilBertConfig, ElectraConfig, ErnieConfig, ErnieMConfig, EsmConfig, FalconConfig, FlaubertConfig, FNetConfig, FunnelConfig, GemmaConfig, Gemma2Config, GPT2Config, GPT2Config, GPTBigCodeConfig, GPTNeoConfig, GPTNeoXConfig, GPTJConfig, IBertConfig, JambaConfig, JetMoeConfig, LayoutLMConfig, LayoutLMv2Config, LayoutLMv3Config, LEDConfig, LiltConfig, LlamaConfig, LongformerConfig, LukeConfig, MarkupLMConfig, MBartConfig, MegaConfig, MegatronBertConfig, MistralConfig, MixtralConfig, MobileBertConfig, MPNetConfig, MptConfig, MraConfig, MT5Config, MvpConfig, NemotronConfig, NezhaConfig, NystromformerConfig, OpenLlamaConfig, OpenAIGPTConfig, OPTConfig, PerceiverConfig, PersimmonConfig, PhiConfig, Phi3Config, PLBartConfig, QDQBertConfig, Qwen2Config, Qwen2MoeConfig, ReformerConfig, RemBertConfig, RobertaConfig, RobertaPreLayerNormConfig, RoCBertConfig, RoFormerConfig, SqueezeBertConfig, StableLmConfig, Starcoder2Config, T5Config, TapasConfig, TransfoXLConfig, UMT5Config, XLMConfig, XLMRobertaConfig, XLMRobertaXLConfig, XLNetConfig, XmodConfig, YosoConfig."
+    "error": "Unrecognized configuration class <class 'transformers_modules.microsoft.Phi-3-medium-4k-instruct.ae004ae82eb6eddc32906dfacb1d6dfea8f91996.configuration_phi3.Phi3Config'> for this kind of AutoModel: AutoModelForSequenceClassification.\nModel type should be one of AlbertConfig, BartConfig, BertConfig, BigBirdConfig, BigBirdPegasusConfig, BioGptConfig, BloomConfig, CamembertConfig, CanineConfig, LlamaConfig, ConvBertConfig, CTRLConfig, Data2VecTextConfig, DebertaConfig, DebertaV2Config, DistilBertConfig, ElectraConfig, ErnieConfig, ErnieMConfig, EsmConfig, FalconConfig, FlaubertConfig, FNetConfig, FunnelConfig, GemmaConfig, Gemma2Config, GPT2Config, GPT2Config, GPTBigCodeConfig, GPTNeoConfig, GPTNeoXConfig, GPTJConfig, IBertConfig, JambaConfig, JetMoeConfig, LayoutLMConfig, LayoutLMv2Config, LayoutLMv3Config, LEDConfig, LiltConfig, LlamaConfig, LongformerConfig, LukeConfig, MarkupLMConfig, MBartConfig, MegaConfig, MegatronBertConfig, MistralConfig, MixtralConfig, MobileBertConfig, MPNetConfig, MptConfig, MraConfig, MT5Config, MvpConfig, NemotronConfig, NezhaConfig, NystromformerConfig, OpenLlamaConfig, OpenAIGPTConfig, OPTConfig, PerceiverConfig, PersimmonConfig, PhiConfig, Phi3Config, PLBartConfig, QDQBertConfig, Qwen2Config, Qwen2MoeConfig, ReformerConfig, RemBertConfig, RobertaConfig, RobertaPreLayerNormConfig, RoCBertConfig, RoFormerConfig, SqueezeBertConfig, StableLmConfig, Starcoder2Config, T5Config, TapasConfig, TransfoXLConfig, UMT5Config, XLMConfig, XLMRobertaConfig, XLMRobertaXLConfig, XLNetConfig, XmodConfig, YosoConfig.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

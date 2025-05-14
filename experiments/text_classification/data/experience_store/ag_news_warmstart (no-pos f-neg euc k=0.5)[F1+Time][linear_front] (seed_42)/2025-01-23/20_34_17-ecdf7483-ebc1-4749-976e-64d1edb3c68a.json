@@ -97,9 +97,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2025-01-23 20:34:17",
     "alias": "ag_news_warmstart_id:(no-pos f-neg euc k=0.5)[F1+Time][linear_front]-rd:42 (rn:42)",
-    "accuracy": 0.9094305555555555,
     "cross_val_steps": null,
-    "f1": 0.909260122106189,
-    "evaluation_time": 841.0391170978546,
-    "error": null
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.9094305555555555
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.909260122106189
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 841.0391170978546
+        }
+    ]
 }

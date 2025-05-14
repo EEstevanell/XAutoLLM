@@ -88,9 +88,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-11-03 17:16:39",
     "alias": "meld",
-    "accuracy": 0.050511124473842456,
     "cross_val_steps": null,
-    "f1": 0.018079468437027058,
-    "evaluation_time": 1158.3752635717392,
-    "error": null
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.050511124473842456
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.018079468437027058
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 1158.3752635717392
+        }
+    ]
 }

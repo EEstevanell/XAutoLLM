@@ -85,9 +85,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-11-30 06:09:26",
     "alias": "liar (rnd:123) ",
-    "accuracy": 0.15112912565141864,
     "cross_val_steps": null,
-    "f1": 0.06085114398598282,
-    "evaluation_time": null,
-    "error": null
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.15112912565141864
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.06085114398598282
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }
