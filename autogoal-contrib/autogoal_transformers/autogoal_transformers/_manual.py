@@ -1421,7 +1421,6 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
         num_workers: CategoricalValue("default"),  # type: ignore
-        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1441,7 +1440,6 @@ class FineTuneGenLLMClassifier(FineTuneLLMEmbeddingClassifier):
             gradient_clipping_max_norm,
             class_weighted_loss,
             num_workers,
-            data_downsize,
         )
 
 
@@ -1470,7 +1468,6 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
         gradient_clipping_max_norm: CategoricalValue(0.5, 1.0, 5.0),  # type: ignore
         class_weighted_loss: BooleanValue(),  # type: ignore
         num_workers: CategoricalValue("default"),  # type: ignore
-        data_downsize: CategoricalValue("none", "1/4", "half"),  # type: ignore
     ):
         super().__init__(
             inner_model,
@@ -1491,7 +1488,6 @@ class PartialFineTuneGenLLMClassifier(PartialFineTuneLLMEmbeddingClassifier):
             gradient_clipping_max_norm,
             class_weighted_loss,
             num_workers,
-            data_downsize,
         )
 
 

@@ -35,18 +35,29 @@ class KNNWarmStart(WarmStart):
             *args, **kwargs: Arguments for WarmStart. self.metrics (List[MetricSpec]) is populated by parent.
         """
         super().__init__(*args, **kwargs)
-        # 1) automatically set best_value per metric from past experiences
-        for m in self.metrics:
-            # collect all past values for this metric
-            vals = [exp_val.value
-                    for exp in self._experiences
-                    for exp_val in (exp.metrics or [])
-                    if exp_val.name == m.name]
+        
+        # 1) Automatically set best_value per metric from past experiences
+        for spec in self.metrics:
+            vals: List[float] = []
+            for exp in self._experiences:
+                for m in (exp.metrics or []):
+                    if (
+                        m.name == spec.name
+                        and m.value is not None
+                        and np.isfinite(m.value)
+                    ):
+                        vals.append(m.value)
             if vals:
-                m.best_value = max(vals) if m.maximize else min(vals)
+                spec.best_value = max(vals) if spec.maximize else min(vals)
+                logger.debug(
+                    f"Metric `{spec.name}` best_value set to {spec.best_value}"
+                )
             else:
-                # no data → fall back to “current default”
-                m.best_value = 1 if m.maximize else 0
+                spec.best_value = None
+                logger.debug(
+                    f"Metric `{spec.name}` has no valid historical values; "
+                    "best_value set to None"
+                )
 
         self.feature_ensemble_weight = feature_ensemble_weight
         self.metrics_ensemble_weight = metrics_ensemble_weight
@@ -69,7 +80,7 @@ class KNNWarmStart(WarmStart):
           neg_distances: normalized feature-only distance
                          for experiences WITHOUT metrics
         """
-        # --- 1) flatten features into vectors ---
+        # 1) Flatten
         def flatten(feat_dict, sys_feat):
             parts = [v.ravel() for v in feat_dict.values() if v is not None]
             if sys_feat is not None:
@@ -79,47 +90,44 @@ class KNNWarmStart(WarmStart):
         curr_vec = flatten(current_task_features, current_system_features)[None, :]
         exp_matrix = np.vstack([flatten(e.task_features, e.system_features) for e in experiences])
 
-        # --- 2) compute & normalize feature distances ---
-        metric = "cosine"
+        # 2) Feature distances + normalization
+        metric = "euclidean"
         if curr_vec.shape[1] == 0:
             raw_fd = np.ones(len(experiences))
         else:
             raw_fd = pairwise_distances(curr_vec, exp_matrix, metric=metric).ravel()
         norm_fd = self._normalize_scalar_list(raw_fd.tolist())
 
-        # --- 3) compute & normalize metric distances for positives ---
+        # 3) Metric-distances only for VALID metrics, else None
         unnorm_md: List[Optional[float]] = []
         for e in experiences:
-            if e.metrics is None:
+            if not self._has_valid_metrics(e):
                 unnorm_md.append(None)
-            else:
-                s = 0.0
-                for spec in self.metrics:
-                    val = next((m.value for m in e.metrics if m.name == spec.name), None)
-                    if val is None or spec.best_value is None:
-                        s += spec.weight  # max penalty
-                    else:
-                        s += abs(val - spec.best_value) * spec.weight
-                unnorm_md.append(s)
+                continue
 
-        # normalize only the non-None entries
+            total = 0.0
+            for spec in self.metrics:
+                m_val = next(m.value for m in e.metrics if m.name == spec.name)
+                total += abs(m_val - spec.best_value) * spec.weight
+            unnorm_md.append(total)
+
+        # 4) Normalize only the non-None
         md_vals = [v for v in unnorm_md if v is not None]
         norm_md_vals = self._normalize_scalar_list(md_vals) if md_vals else []
-        # rebuild full-length list (None → 1.0)
         norm_md: List[float] = []
         idx = 0
         for v in unnorm_md:
             if v is None:
-                norm_md.append(1.0)
+                norm_md.append(1.0)  # maximal penalty
             else:
                 norm_md.append(norm_md_vals[idx])
                 idx += 1
 
-        # --- 4) split into two dicts ---
+        # 5) Build the two dicts
         pos_distances: Dict[Experience, float] = {}
         neg_distances: Dict[Experience, float] = {}
         for i, e in enumerate(experiences):
-            if e.metrics is None:
+            if not self._has_valid_metrics(e):
                 neg_distances[e] = norm_fd[i]
             else:
                 pos_distances[e] = (
@@ -128,6 +136,17 @@ class KNNWarmStart(WarmStart):
                 )
 
         return pos_distances, neg_distances
+    
+    def _has_valid_metrics(self, exp: Experience) -> bool:
+        if exp.metrics is None:
+            return False
+
+        for spec in self.metrics:  # MetricSpec(name, weight, best_value, ...)
+            m = next((m for m in exp.metrics if m.name == spec.name), None)
+            if m is None or m.value is None or not np.isfinite(m.value):
+                return False
+
+        return True
     
     def compute_learning_rates(
         self,
@@ -179,9 +198,8 @@ class KNNWarmStart(WarmStart):
         return selected_pos, selected_neg
     
     def warm_up(self, generator_fn: Callable) -> Optional[Dict]:
-        # 1) Extract current features
-        self.pre_warm_up(generator_fn)
-
+        self.generator_fn = generator_fn
+        
         # 2) Filter experiences
         exps = self.filter_experiences(self._experiences)
         if not exps:

@@ -155,11 +155,11 @@ class ExperimentExecutor:
         logger.info("Loading multi-objective experiment configurations")
         return [
             {
-                "experiment_id": f"imdb-knn-k25",
-                "dataset": "imdb",
+                "experiment_id": f"liar-knn-k25",
+                "dataset": "liar",
                 "config": {
                     "k": 25,
-                    "exclude": "imdb|_warmstart|seed|knn",
+                    "exclude": "liar|_warmstart|seed|knn",
                     "adaptative_positive_alpha_limit": 1,
                     "adaptative_negative_alpha_limit": -1,
                 },
@@ -241,7 +241,7 @@ class ExperimentExecutor:
             print(f"[PID {os.getpid()}] Could not set random seeds: {e}")
             
         from autogoal.meta_learning.distance import EuclideanDistance
-        from autogoal.datasets import sst2, ag_news, liar, meld
+        from autogoal.datasets import sst2, ag_news, liar, meld, squad
         from autogoal.meta_learning.warm_start import WarmStart
         from autogoal.meta_learning.knn_warm_start import KNNWarmStart
         from autogoal.meta_learning.normalization import LogNormalizer, MinMaxNormalizer
@@ -276,7 +276,6 @@ class ExperimentExecutor:
         experiment_id = experiment_data["experiment_id"]
         dataset_name = experiment_data["dataset"]
         dataset = dataset_dict[dataset_name]
-        is_baseline = experiment_data["is_baseline"]
         config = experiment_data.get("config", dict())
 
         # Create a safe filename-friendly version of the experiment ID
@@ -320,7 +319,6 @@ class ExperimentExecutor:
         file_logger.info(
             f"Executing experiment: {experiment_id} for dataset {dataset_name} on CUDA device {device_id}"
         )
-        file_logger.info(f"  Baseline: {is_baseline}")
         file_logger.info(f"  CPU cores: {cpu_cores}")
         file_logger.info(f"  Thread environment variables set to: {cpu_count} threads")
 
@@ -455,13 +453,10 @@ class ExperimentExecutor:
         except Exception as e:
             file_logger.error(f"Failed to initialize framework: {e}")
 
-        try:
-            # Fit the model and evaluate
-            model.fit(X_train, y_train, logger=loggers)
-            results = model.score(X_test, y_test)
-            print(f"{dataset_name} F1: {results}")
-        except Exception as e:
-            file_logger.error(f"Failure during optimization: {e}")
+        # Fit the model and evaluate
+        model.fit(X_train, y_train, logger=loggers)
+        results = model.score(X_test, y_test)
+        print(f"{dataset_name} F1: {results}")
 
         # Make sure to flush and close the output file
         sys.stdout.flush()
@@ -478,11 +473,7 @@ class ExperimentExecutor:
         # Load configurations based on experiment type
         self.experiments = self.load_multi_objective_configs()
 
-        # Sort experiments to ensure baselines run first
-        self.experiments.sort(key=lambda x: (not x["is_baseline"], x["dataset"]))
-
         logger.info(f"Loaded {len(self.experiments)} experiment configurations")
-        logger.info(f"Baseline experiments will be executed first")
 
         # Track results
         all_results = []
@@ -546,7 +537,6 @@ class ExperimentExecutor:
                     {
                         "experiment_id": experiment_id,
                         "dataset": experiment["dataset"],
-                        "is_baseline": experiment["is_baseline"],
                         "device": device_id,
                         "cpu_cores": len(cpu_cores),
                         "log_file": str(log_file_path),

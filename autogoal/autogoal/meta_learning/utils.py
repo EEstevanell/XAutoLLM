@@ -6,6 +6,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from autogoal.kb._algorithm import Algorithm, AlgorithmBase, Pipeline
+import numpy as np
 
 
 def extract_algorithms_from_pipeline(pipeline: Pipeline) -> List[Dict[str, Any]]:
@@ -137,7 +138,7 @@ class Metric:
         return cls(
             name=d["name"],
             maximize=bool(d["maximize"]),
-            value=float(d["value"]),
+            value=float(d["value"] if d["value"] is not None else (np.inf if d["maximize"] else -np.inf)),
         )
 
 
