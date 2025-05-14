@@ -85,9 +85,23 @@
     "system_feature_extractor_name": "SystemFeatureExtractor",
     "timestamp": "2024-12-08 13:39:48",
     "alias": "sst2_warmstart_id:(f-pos + a-neg)-rd:123 (rnd:123)",
-    "accuracy": null,
     "cross_val_steps": null,
-    "f1": null,
-    "evaluation_time": null,
-    "error": "Exceeded allowed time for execution. The process was terminated after 5400.0 seconds."
+    "error": "Exceeded allowed time for execution. The process was terminated after 5400.0 seconds.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
 }

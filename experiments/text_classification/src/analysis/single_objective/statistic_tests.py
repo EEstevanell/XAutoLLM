@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from scipy import stats
-from src.data_loading.data_loader import DataLoader
+from text_classification.src.data_loading.data_loader import DataLoader
 import statsmodels.stats.multitest as multitest
 from scipy.integrate import trapezoid
 

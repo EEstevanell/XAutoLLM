@@ -12,16 +12,16 @@ Usage:
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any
 import re
+import os
 
 import yaml
 
-from src.data_loading import WarmstartConfigParser
-from src.data_loading.data_loader import DataLoader
+from text_classification.src.data_loading import WarmstartConfigParser
+from text_classification.src.data_loading.data_loader import DataLoader
 
 
 # Configure logging properly
