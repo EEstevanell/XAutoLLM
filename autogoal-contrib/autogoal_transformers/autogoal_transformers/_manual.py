@@ -58,11 +58,13 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoConfig,
     AutoModelForSeq2SeqLM,
-    AutoModelForCausalLM
+    AutoModelForCausalLM,
 )
 import logging
 from sklearn.model_selection import train_test_split
 from transformers import DataCollatorForSeq2Seq, DataCollatorForLanguageModeling
+from functools import partial
+
 
 @nice_repr
 class SeqPretrainedTokenClassifier(AlgorithmBase):
@@ -1608,7 +1610,7 @@ class FineTunerGenBase(AlgorithmBase):
         self.max_new_tokens = None  # Will be set after model/tokenizer is loaded
         self.data_downsize = data_downsize
         self.quantization = quantization
-        
+
         # Prepare logger once
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
@@ -1617,7 +1619,6 @@ class FineTunerGenBase(AlgorithmBase):
             h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
             self.logger.addHandler(h)
 
-    
     def init_model(self):
         if self.model is not None and self.tokenizer is not None:
             return
@@ -1680,7 +1681,7 @@ class FineTunerGenBase(AlgorithmBase):
     def print_trainable_parameters(self):
         if hasattr(self.model, "print_trainable_parameters"):
             self.model.print_trainable_parameters()
-        
+
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(
             p.numel() for p in self.model.parameters() if p.requires_grad
@@ -1833,6 +1834,45 @@ class FineTunerGenBase(AlgorithmBase):
             logger.error(f"Error calculating max_new_tokens: {e}.")
             raise e
 
+    def _encode_batch(self, batch):
+        if self.is_encoder_decoder:
+            inputs = [item["input"] for item in batch]
+            targets = [item["target"] for item in batch]
+            # Dynamic padding: pad to the longest in batch
+            model_inputs = self.tokenizer(
+                inputs,
+                padding="longest",  # dynamic padding
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+            )
+            labels = self.tokenizer(
+                targets,
+                padding="longest",  # dynamic padding
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+            )["input_ids"]
+            labels[labels == self.tokenizer.pad_token_id] = -100
+            model_inputs["labels"] = labels
+            return model_inputs
+
+        else:
+            prompts = [item["prompt"] for item in batch]
+            completions = [item["completion"] for item in batch]
+            texts = [p + c for p, c in zip(prompts, completions)]
+            model_inputs = self.tokenizer(
+                texts,
+                padding="longest",  # dynamic padding
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+            )
+            labels = model_inputs["input_ids"].clone()
+            labels[labels == self.tokenizer.pad_token_id] = -100
+            model_inputs["labels"] = labels
+            return model_inputs
+
     def finetune(self, X, y):
         """
         Finetune the generative model with periodic validation and logging.
@@ -1867,67 +1907,18 @@ class FineTunerGenBase(AlgorithmBase):
         val_dataset = self._create_dataset(X_val, y_val)
         num_workers = self._get_num_workers()
 
-        if self.is_encoder_decoder:
-            def encode_batch(batch):
-                inputs = [item["input"] for item in batch]
-                targets = [item["target"] for item in batch]
-                # Dynamic padding: pad to the longest in batch
-                model_inputs = self.tokenizer(
-                    inputs,
-                    padding="longest",  # dynamic padding
-                    truncation=True,
-                    max_length=self.max_length,
-                    return_tensors="pt"
-                )
-                labels = self.tokenizer(
-                    targets,
-                    padding="longest",  # dynamic padding
-                    truncation=True,
-                    max_length=self.max_length,
-                    return_tensors="pt"
-                )["input_ids"]
-                labels[labels == self.tokenizer.pad_token_id] = -100
-                model_inputs["labels"] = labels
-                return model_inputs
-        else:
-            def encode_batch(batch):
-                prompts = [item["prompt"] for item in batch]
-                completions = [item["completion"] for item in batch]
-                texts = [p + c for p, c in zip(prompts, completions)]
-                model_inputs = self.tokenizer(
-                    texts,
-                    padding="longest",  # dynamic padding
-                    truncation=True,
-                    max_length=self.max_length,
-                    return_tensors="pt"
-                )
-                labels = model_inputs["input_ids"].clone()
-                labels[labels == self.tokenizer.pad_token_id] = -100
-                model_inputs["labels"] = labels
-                return model_inputs
-
         # DataLoader for training
-        try:
-            train_loader = DataLoader(
-                train_dataset,
-                batch_size=self.batch_size,
-                shuffle=True,
-                num_workers=num_workers,
-                pin_memory=(self.device.type == "cuda"),
-                prefetch_factor=2 if num_workers > 0 else None,
-                persistent_workers=(num_workers > 0),
-                collate_fn=encode_batch,
-            )
-        except (RuntimeError, OSError, NotImplementedError) as e:
-            print(f"[WARN] DataLoader worker error ({e}), falling back to num_workers=0.")
-            train_loader = DataLoader(
-                train_dataset,
-                batch_size=self.batch_size,
-                shuffle=True,
-                num_workers=0,
-                pin_memory=(self.device.type == "cuda"),
-                collate_fn=encode_batch,
-            )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=(self.device.type == "cuda"),
+            prefetch_factor=2 if num_workers > 0 else None,
+            persistent_workers=(num_workers > 0),
+            collate_fn=partial(self._encode_batch),
+        )
+        
         # DataLoader for validation (no need for try/except, always safe)
         val_loader = DataLoader(
             val_dataset,
@@ -1935,12 +1926,14 @@ class FineTunerGenBase(AlgorithmBase):
             shuffle=False,
             num_workers=0,
             pin_memory=(self.device.type == "cuda"),
-            collate_fn=encode_batch,
+            collate_fn=partial(self._encode_batch),
         )
 
         # --- Pre-finetuning validation ---
         pre_val_loss, pre_val_ppl = self._validate(val_loader, logger)
-        logger.info(f"[Pre-Finetune] Initial validation loss: {pre_val_loss:.4f}, perplexity: {pre_val_ppl:.2f}")
+        logger.info(
+            f"[Pre-Finetune] Initial validation loss: {pre_val_loss:.4f}, perplexity: {pre_val_ppl:.2f}"
+        )
         for handler in logger.handlers:
             handler.flush()
 
@@ -1948,7 +1941,9 @@ class FineTunerGenBase(AlgorithmBase):
         total_steps = len(train_loader) * self.epochs
         scheduler = self._setup_scheduler(optimizer, total_steps)
         scaler = (
-            torch.amp.GradScaler(device=self.device.type, enabled=self.use_mixed_precision)
+            torch.amp.GradScaler(
+                device=self.device.type, enabled=self.use_mixed_precision
+            )
             if self.use_mixed_precision and self.device.type == "cuda"
             else None
         )
@@ -2034,7 +2029,11 @@ class FineTunerGenBase(AlgorithmBase):
                         loss.detach().item() * self.gradient_accumulation_steps
                     )
                     # Update running loss for tqdm
-                    running_loss = 0.95 * running_loss + 0.05 * loss.item() if step > 0 else loss.item()
+                    running_loss = (
+                        0.95 * running_loss + 0.05 * loss.item()
+                        if step > 0
+                        else loss.item()
+                    )
                     if self.verbose and hasattr(batch_iter, "set_postfix"):
                         batch_iter.set_postfix(loss=f"{running_loss:.4f}")
                 except Exception as batch_exc:
@@ -2051,14 +2050,18 @@ class FineTunerGenBase(AlgorithmBase):
                 # Validation at scheduled steps
                 if (step + 1) in val_steps:
                     val_loss, val_ppl = self._validate(val_loader, logger)
-                    logger.info(f"[Val] Epoch {epoch+1}, Step {step+1}: Loss={val_loss:.4f}, Perplexity={val_ppl:.2f}")
+                    logger.info(
+                        f"[Val] Epoch {epoch+1}, Step {step+1}: Loss={val_loss:.4f}, Perplexity={val_ppl:.2f}"
+                    )
                     for handler in logger.handlers:
                         handler.flush()
 
             avg_loss = total_loss / max(1, len(train_loader) - failed_batches)
             # Validation at epoch end
             val_loss, val_ppl = self._validate(val_loader, logger)
-            logger.info(f"[Val] Epoch {epoch+1} END: Loss={val_loss:.4f}, Perplexity={val_ppl:.2f}")
+            logger.info(
+                f"[Val] Epoch {epoch+1} END: Loss={val_loss:.4f}, Perplexity={val_ppl:.2f}"
+            )
             if self.verbose:
                 logger.info(f"Epoch {epoch+1}/{self.epochs}, Training Loss: {avg_loss}")
                 for handler in logger.handlers:
@@ -2068,7 +2071,9 @@ class FineTunerGenBase(AlgorithmBase):
                 if previous_val_loss - val_loss < self.early_stopping_delta:
                     epochs_no_improve += 1
                     if self.verbose:
-                        logger.info(f"No improvement in val loss for {epochs_no_improve} epochs.")
+                        logger.info(
+                            f"No improvement in val loss for {epochs_no_improve} epochs."
+                        )
                         for handler in logger.handlers:
                             handler.flush()
                     if epochs_no_improve >= self.early_stopping_patience:
@@ -2091,12 +2096,15 @@ class FineTunerGenBase(AlgorithmBase):
         """
         import torch
         import numpy as np
+
         self.model.eval()
         total_loss = 0
         n_batches = 0
         with torch.no_grad():
             for batch in val_loader:
-                batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
+                batch = {
+                    k: v.to(self.device, non_blocking=True) for k, v in batch.items()
+                }
                 try:
                     outputs = self.model(**batch)
                     loss = outputs.loss
@@ -2105,7 +2113,7 @@ class FineTunerGenBase(AlgorithmBase):
                 except Exception as e:
                     logger.warning(f"Validation batch failed: {e}")
         avg_loss = total_loss / max(1, n_batches)
-        perplexity = float(np.exp(avg_loss)) if avg_loss < 20 else float('inf')
+        perplexity = float(np.exp(avg_loss)) if avg_loss < 20 else float("inf")
         self.model.train()
         return avg_loss, perplexity
 
@@ -2115,14 +2123,29 @@ class FineTunerGenBase(AlgorithmBase):
         # Use minimal dataset and tokenizer's built-in padding for prediction
         if self.is_encoder_decoder:
             dataset = [{"input": inp} for inp in X]
+
             def predict_collate(batch):
                 inputs = [item["input"] for item in batch]
-                return self.tokenizer(inputs, max_length=self.max_length, padding=True, truncation=True, return_tensors="pt")
+                return self.tokenizer(
+                    inputs,
+                    max_length=self.max_length,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                )
+
         else:
             dataset = [{"prompt": inp} for inp in X]
+
             def predict_collate(batch):
                 prompts = [item["prompt"] for item in batch]
-                return self.tokenizer(prompts, max_length=self.max_length, padding=True, truncation=True, return_tensors="pt")
+                return self.tokenizer(
+                    prompts,
+                    max_length=self.max_length,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                )
 
         self.model.eval()
         results = []
@@ -2229,7 +2252,7 @@ class FineTunerGenBase(AlgorithmBase):
                         # No new tokens generated, or output is shorter than input (should not happen with proper generate call)
                         # logger.warning(f"Batch {step+1}: No new tokens generated or output_ids shorter than input_ids. ")
                         generated_ids_only = output_ids
-                        
+
                     decoded_answers = self.tokenizer.batch_decode(
                         generated_ids_only, skip_special_tokens=True
                     )
@@ -2446,7 +2469,7 @@ class LoraGenLLMTask(FineTunerGenBase):
             and getattr(self, "tokenizer", None) is not None
         ):
             return
-        
+
         super().init_model()
         logger = logging.getLogger("autogoal.lora")
         logger.setLevel(logging.INFO)
@@ -2461,10 +2484,11 @@ class LoraGenLLMTask(FineTunerGenBase):
         SUPPORTED_TYPES = (nn.Linear,)
         try:
             from transformers.pytorch_utils import Conv1D
+
             SUPPORTED_TYPES = (nn.Linear, nn.Embedding, nn.Conv2d, Conv1D)
         except ImportError:
             SUPPORTED_TYPES = (nn.Linear, nn.Embedding, nn.Conv2d)
-            
+
         candidate_keywords = [
             "q_proj",
             "v_proj",
@@ -2483,7 +2507,7 @@ class LoraGenLLMTask(FineTunerGenBase):
             "fc",
             "mlp",
         ]
-            
+
         # 2. Regex for projection layers
         candidate_pattern = "|".join(candidate_keywords)
         proj_pattern = re.compile(rf"({candidate_pattern}|.*dense.*)$")
@@ -2504,7 +2528,7 @@ class LoraGenLLMTask(FineTunerGenBase):
 
         if not target_modules:
             raise ValueError("No valid target modules found for LoRA.")
-        
+
         target_modules = sorted(target_modules)
         logger.info(f"[LoRA] Target modules for LoRA: {target_modules}")
 
@@ -2524,7 +2548,9 @@ class LoraGenLLMTask(FineTunerGenBase):
 
         # --- LoRA best practice: Enable adapters and print trainable parameters ---
         # Enable LoRA adapters if available (PEFT >= 0.4.0)
-        if hasattr(self.model, "enable_adapters") and callable(getattr(self.model, "enable_adapters")):
+        if hasattr(self.model, "enable_adapters") and callable(
+            getattr(self.model, "enable_adapters")
+        ):
             try:
                 self.model.enable_adapters()
                 logger.info("LoRA adapters enabled.")
