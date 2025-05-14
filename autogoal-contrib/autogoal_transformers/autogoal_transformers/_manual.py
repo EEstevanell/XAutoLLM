@@ -2111,7 +2111,8 @@ class FineTunerGenBase(AlgorithmBase):
                     total_loss += loss.item()
                     n_batches += 1
                 except Exception as e:
-                    logger.warning(f"Validation batch failed: {e}")
+                    logger.warning(f"Validation batch failed:")
+                    raise e
         avg_loss = total_loss / max(1, n_batches)
         perplexity = float(np.exp(avg_loss)) if avg_loss < 20 else float("inf")
         self.model.train()
