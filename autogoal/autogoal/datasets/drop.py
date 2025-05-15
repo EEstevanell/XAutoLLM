@@ -187,9 +187,7 @@ def load(make_prompt: bool, *args, **kwargs) -> Tuple[
     train_file_path = str(data_folder_path / "train.csv")
     test_file_path = str(data_folder_path / "test.csv")
 
-    print(f"Attempting to load training data from: {train_file_path}")
     X_train_tuples, y_train = read_csv_drop(train_file_path)
-    print(f"Attempting to load test data from: {test_file_path}")
     X_test_tuples, y_test = read_csv_drop(test_file_path)
 
     if make_prompt:

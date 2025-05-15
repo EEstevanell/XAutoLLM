@@ -28,7 +28,13 @@ from autogoal.search.utils import non_dominated_sort, crowding_distance_with_max
 
 
 logger = logging.getLogger(__name__) # Initialize logger for the module
-
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
 class WarmStart:
     """
     Implements warm-starting for AutoML by adjusting the internal probabilistic model using relevant past experiences.
@@ -169,10 +175,11 @@ class WarmStart:
         self._experiences = filtered_experiences
         self._infer_metric_maximize_flags()
 
-        print(f"Using '{self.utility_function}' utility function.")
-        print(f"Metrics: {[m.name for m in self.metrics]}, Weights: {[m.weight for m in self.metrics]}, Maximize: {[m.maximize for m in self.metrics]}")
-        print(f"Feature weights: TaskMeta={self.task_meta_weight}, Semantic={self.semantic_weight}, System={self.system_weight}")
-        print(f"Distance for Meta/System: {self.distance_metric.__class__.__name__}, Distance for Semantic: {self.semantic_distance_metric.__class__.__name__}")
+        self.logger = logging.getLogger(__name__)
+        self.logger.debug(f"Using '{self.utility_function}' utility function.")
+        self.logger.debug(f"Metrics: {[m.name for m in self.metrics]}, Weights: {[m.weight for m in self.metrics]}, Maximize: {[m.maximize for m in self.metrics]}")
+        self.logger.debug(f"Feature weights: TaskMeta={self.task_meta_weight}, Semantic={self.semantic_weight}, System={self.system_weight}")
+        self.logger.debug(f"Distance for Meta/System: {self.distance_metric.__class__.__name__}, Distance for Semantic: {self.semantic_distance_metric.__class__.__name__}")
 
     def _process_metrics(self, metrics):
         """
@@ -270,16 +277,16 @@ class WarmStart:
 
         recompute_task_features = False
         if self.current_task_features is None:
-            logger.info("No precomputed task features provided or found in cache. Will extract.")
+            logger.debug("No precomputed task features provided or found in cache. Will extract.")
             recompute_task_features = True
         elif isinstance(self.current_task_features, dict):
             # Check if essential keys like 'meta' are None. 'semantic' can sometimes be None.
             if self.current_task_features.get("meta") is None:
-                logger.info("Provided/cached task features have 'meta' component as None. Recomputing task features.")
+                logger.debug("Provided/cached task features have 'meta' component as None. Recomputing task features.")
                 recompute_task_features = True
             # Optionally, add more checks, e.g., if semantic is critical and is None
             # elif "semantic" in self.current_task_features and self.current_task_features.get("semantic") is None:
-            #     logger.info("Provided/cached task features have 'semantic' component as None. Recomputing task features.")
+            #     logger.debug("Provided/cached task features have 'semantic' component as None. Recomputing task features.")
             #     recompute_task_features = True
         else:
             logger.warning(
@@ -288,10 +295,10 @@ class WarmStart:
             recompute_task_features = True
         
         if recompute_task_features:
-            logger.info("Extracting task features for the current dataset.")
+            logger.debug("Extracting task features for the current dataset.")
             self.current_task_features = self._extract_task_features(X_train, y_train)
         else:
-            logger.info("Using provided/cached task features.")
+            logger.debug("Using provided/cached task features.")
 
     def warm_up(self, generator_fn):
         """
@@ -345,7 +352,7 @@ class WarmStart:
             negative_distances,
         )
 
-        print(
+        self.logger.debug(
             f"Learning from {len(selected_positive_experiences)} positive experiences and {len(selected_negative_experiences)} negative experiences."
         )
 
@@ -353,9 +360,9 @@ class WarmStart:
         self.adjust_model(alpha_experiences)
 
         if self.exit_after_warmup:
-            print("Exiting after warm-up.")
+            self.logger.debug("Exiting after warm-up.")
             if self.on_warmup_exit:
-                print("Executing on exit callback")
+                self.logger.debug("Executing on exit callback")
                 self.on_warmup_exit(self._model)
             else:
                 # Log the distributions for generative LLM tasks
@@ -447,8 +454,7 @@ class WarmStart:
             # Ensure 'meta' and 'semantic' keys exist and values are np.ndarray or None
             for key in ["meta", "semantic"]:
                 if key not in features:
-                    # Consider how to handle if a key is truly optional vs. an error
-                    print(f"Warning: Dataset features dictionary from {extractor.__class__.__name__} missing key: '{key}'. Assuming None.")
+                    self.logger.warning(f"Dataset features dictionary from {extractor.__class__.__name__} missing key: '{key}'. Assuming None.")
                     features[key] = None # Default to None if missing
                 
                 val = features[key]
@@ -471,8 +477,8 @@ class WarmStart:
             features_dict = extractor.extract_features() # This returns a dict {"meta": ndarray|None, "semantic": ndarray|None}
 
             if features_dict is None: # Graceful handling if extractor itself returns None
-                 print(f"Warning: System feature extractor {extractor.__class__.__name__} returned None overall.")
-                 return None
+                self.logger.warning(f"System feature extractor {extractor.__class__.__name__} returned None overall.")
+                return None
 
             if not isinstance(features_dict, dict) or "meta" not in features_dict:
                 raise ValueError(
@@ -749,7 +755,7 @@ class WarmStart:
             self.min_alpha = self.adaptative_negative_alpha_limit / len(
                 selected_negative_experiences
             )
-            print(
+            self.logger.debug(
                 f"Using adaptative negative alpha limit ({self.adaptative_negative_alpha_limit}). "
                 f"Computed min_alpha: {self.min_alpha}"
             )
@@ -761,7 +767,7 @@ class WarmStart:
             self.max_alpha = self.adaptative_positive_alpha_limit / len(
                 selected_positive_experiences
             )
-            print(
+            self.logger.debug(
                 f"Using adaptative positive alpha limit ({self.adaptative_positive_alpha_limit}). "
                 f"Computed max_alpha: {self.max_alpha}"
             )
@@ -942,16 +948,14 @@ class WarmStart:
         mean_dist = np.mean(all_distances)
         std_dist = np.std(all_distances)
         epsilon = 1e-6
-        
-        print(
-            "Initialized beta with mean and std of distances:",
-            mean_dist,
-            std_dist,
+
+        self.logger.debug(
+            f"Initialized beta with mean and std of distances: mean={mean_dist}, std={std_dist}"
         )
-        print("Beta Scale:", self.beta_scale)
+        self.logger.debug(f"Beta Scale: {self.beta_scale}")
 
         beta = self.beta_scale / (max(std_dist, epsilon) + mean_dist)
-        print("Computed beta:", beta)
+        self.logger.debug(f"Computed beta: {beta}")
         return beta
 
     def handle_error_experiences(self, experiences: List[Experience], alphas):

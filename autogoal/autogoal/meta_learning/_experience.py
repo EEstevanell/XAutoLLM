@@ -8,6 +8,7 @@ import numpy as np
 import json
 import uuid
 import re # Added import
+import logging
 
 # Path to store experiences
 DATA_PATH = Path.home() / ".autogoal" / "experience_store" # Changed path
@@ -127,6 +128,7 @@ class Experience:
 
 # Updated ExperienceStore class
 class ExperienceStore:
+    logger = logging.getLogger(__name__)
     DATA_PATH = DATA_PATH
 
     @staticmethod
@@ -186,10 +188,10 @@ class ExperienceStore:
         
         # Use the class attribute DATA_PATH
         current_data_path = ExperienceStore.DATA_PATH
-        print(f"[ExperienceStore] Loading experiences from: {current_data_path}")
+        ExperienceStore.logger.info(f"Loading experiences from: {current_data_path}")
 
         if not current_data_path.exists():
-            print(f"[ExperienceStore] DATA_PATH does not exist: {current_data_path}")
+            ExperienceStore.logger.warning(f"DATA_PATH does not exist: {current_data_path}")
             # No experiences saved yet
             return experiences
 
@@ -212,7 +214,7 @@ class ExperienceStore:
         include_pattern = re.compile(include) if include else None
         exclude_pattern = re.compile(exclude) if exclude else None
 
-        print(f"[ExperienceStore] Filters: from_date={from_date_obj}, to_date={to_date_obj}, include_pattern={'set' if include_pattern else 'None'}, exclude_pattern={'set' if exclude_pattern else 'None'}")
+        ExperienceStore.logger.debug(f"Filters: from_date={from_date_obj}, to_date={to_date_obj}, include_pattern={'set' if include_pattern else 'None'}, exclude_pattern={'set' if exclude_pattern else 'None'}")
 
         # Traverse all alias directories
         for alias_dir in current_data_path.iterdir():
@@ -221,14 +223,14 @@ class ExperienceStore:
                 
                 # Apply alias filtering
                 if include_pattern and not include_pattern.search(alias):
-                    print(f"[ExperienceStore] Skipping alias '{alias}': No match for include pattern.")
+                    ExperienceStore.logger.debug(f"Skipping alias '{alias}': No match for include pattern.")
                     continue
                 
                 if exclude_pattern and exclude_pattern.search(alias):
-                    print(f"[ExperienceStore] Skipping alias '{alias}': Match for exclude pattern.")
+                    ExperienceStore.logger.debug(f"Skipping alias '{alias}': Match for exclude pattern.")
                     continue
                 
-                print(f"[ExperienceStore] Processing alias: {alias}")    
+                ExperienceStore.logger.debug(f"Processing alias: {alias}")    
                 
                 alias_exp_count = 0
                 alias_exp_pos_count = 0
@@ -267,8 +269,8 @@ class ExperienceStore:
                                     else:
                                         alias_exp_neg_count += 1
                                 except Exception as e:
-                                    print(f"[ExperienceStore] Error loading {file_path}: {e}")
+                                    ExperienceStore.logger.error(f"Error loading {file_path}: {e}")
                                     continue
                                 
-                print(f"loaded {alias_exp_count} experiences for alias {alias} ({alias_exp_pos_count} positive, {alias_exp_neg_count} negative)")
+                ExperienceStore.logger.info(f"loaded {alias_exp_count} experiences for alias {alias} ({alias_exp_pos_count} positive, {alias_exp_neg_count} negative)")
         return experiences

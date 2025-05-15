@@ -16,7 +16,7 @@ class NSPEWarmStartSearch(NSPESearch):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.warm_start = warm_start if warm_start is not None else WarmStart(None, 0.2)
+        self.warm_start = warm_start if warm_start is not None else WarmStart()
         self.warm_started = False
         
         

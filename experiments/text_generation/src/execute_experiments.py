@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from multiprocessing import Process, cpu_count
 from autogoal.datasets import drop
+from autogoal.meta_learning.distance import CosineDistance
 from autogoal.ml.metrics import evaluation_time
 import psutil
 import numpy as np
@@ -30,8 +31,8 @@ os.environ["PYTHONPATH"] = (
     + os.environ.get("PYTHONPATH", "")
 )
 
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 # Import the configuration generator
-
 
 def _serialize_task_features(
     task_features: Dict[str, Optional[np.ndarray]],
@@ -273,7 +274,7 @@ class ExperimentExecutor:
         return [
             {
                 "dataset": "drop",
-                "experiment_id": "drop",
+                "experiment_id": "drop_warmstart (a-pos no-neg cos k=0.5)[logarithmic_front]",
                 "is_baseline": True,
                 "objectives": [
                     {
@@ -289,12 +290,65 @@ class ExperimentExecutor:
                 ],
                 "observations": [("exact_match", drop_exact_match)],
                 "config": {
-                    "k_pos": 0,
+                    "k_pos": 10000,
                     "k_neg": 0,
+                    "adaptative_positive_alpha_limit": 1,
+                    "distance": CosineDistance,
+                    "beta_scale": 0.5,
+                    "utility_function": "logarithmic_front",
                 },
             },
             {
-                "dataset": "squad",
+                "dataset": "drop",
+                "experiment_id": "drop_warmstart (f-pos f-neg)[logarithmic_front]",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": drop_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("exact_match", drop_exact_match)],
+                "config": {
+                    "k_pos": 10000,
+                    "k_neg": 10000,
+                    "beta_scale": 0,
+                    "utility_function": "logarithmic_front",
+                },  
+            },
+            {
+                "dataset": "drop",
+                "experiment_id": "drop_warmstart (a-pos f-neg)[linear_front]",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": drop_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("exact_match", drop_exact_match)],
+                "config": {
+                    "k_pos": 10000,
+                    "k_neg": 10000,
+                    "adaptative_positive_alpha_limit": 1,
+                    "beta_scale": 0,
+                    "utility_function": "linear_front",
+                },  
+            },
+            {
+                "dataset": "squad_warmstart (a-pos no-neg)[weighted_sum]",
                 "experiment_id": "squad",
                 "is_baseline": True,
                 "objectives": [
@@ -311,9 +365,63 @@ class ExperimentExecutor:
                 ],
                 "observations": [("exact_match", squad_exact_match)],
                 "config": {
-                    "k_pos": 0,
+                    "k_pos": 10000,
                     "k_neg": 0,
+                    "adaptative_positive_alpha_limit": 1,
+                    "beta_scale": 0,
+                    "utility_function": "weighted_sum",
+                }, 
+            },
+            {
+                "dataset": "squad_warmstart (a-pos f-neg cos k=0.5)[weighted_sum]",
+                "experiment_id": "squad",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": squad_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("exact_match", squad_exact_match)],
+                "config": {
+                    "k_pos": 10000,
+                    "k_neg": 10000,
+                    "adaptative_positive_alpha_limit": 1,
+                    "distance": CosineDistance,
+                    "beta_scale": 0.5,
+                    "utility_function": "weighted_sum",
                 },
+            },
+            {
+                "dataset": "squad_warmstart (a-pos f-neg)[logarithmic_front]",
+                "experiment_id": "squad",
+                "is_baseline": True,
+                "objectives": [
+                    {
+                        "name": "f1",
+                        "metric": squad_f1,
+                        "maximize": True,
+                    },
+                    {
+                        "name": "evaluation_time",
+                        "metric": evaluation_time,
+                        "maximize": False,
+                    },
+                ],
+                "observations": [("exact_match", squad_exact_match)],
+                "config": {
+                    "k_pos": 10000,
+                    "k_neg": 10000,
+                    "adaptative_positive_alpha_limit": 1,
+                    "beta_scale": 0,
+                    "utility_function": "logarithmic_front",
+                }, 
             }
         ]
 
@@ -478,6 +586,9 @@ class ExperimentExecutor:
                 positive_min_threshold=config.get("positive_min_threshold", 0.2),
                 adaptative_negative_alpha_limit=config.get(
                     "adaptative_negative_alpha_limit", None
+                ),
+                adaptative_positive_alpha_limit=config.get(
+                    "adaptative_positive_alpha_limit", None
                 ),
                 k_pos=config.get("k_pos", 10),  # Number of experiences to consider
                 k_neg=config.get("k_neg", 10),  # Number of experiences to consider
@@ -721,7 +832,6 @@ def main():
         executor = ExperimentExecutor()
 
         from autogoal.utils._process import initialize_cuda_multiprocessing
-
         initialize_cuda_multiprocessing()
 
         # Execute all experiments
