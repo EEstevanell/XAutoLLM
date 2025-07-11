@@ -56,8 +56,9 @@ class RANLP25Dataset:
 
         all_labels = pd.Categorical(train_df["type"]).categories
         label_mapping = {lbl: idx for idx, lbl in enumerate(all_labels)}
-        y_train = [label_mapping[t] for t in train_df["type"]]
-        y_test = [label_mapping[t] for t in test_df["type"]]
+        y_train = [str(label_mapping[t]) for t in train_df["type"]]
+        y_test = [str(label_mapping[t]) for t in test_df["type"]]
+
         return X_train, y_train, X_test, y_test
 
 def set_seeds(seed: int = RANDOM_SEED):
@@ -81,7 +82,7 @@ def execute_experiment():
     json_log_path = OUTPUT_DIR / f"{EXPERIMENT_ID}.json"
     results_path = OUTPUT_DIR / f"{EXPERIMENT_ID}_results.json"
     preds_path = OUTPUT_DIR / f"{EXPERIMENT_ID}_test_predictions.json"
-
+    
     automl = AutoML(
         input=(Seq[Sentence], Supervised[VectorCategorical]),
         output=VectorCategorical,
