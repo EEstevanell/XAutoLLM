@@ -11,7 +11,6 @@ import random
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, precision_score, recall_score
 
 import torch
@@ -25,7 +24,8 @@ from autogoal_transformers._manual import (
     LoraLLMEmbeddingClassifier,
 )
 from autogoal.datasets.semeval_2023_task_8_1 import macro_f1_plain
-from autogoal.utils import Gb, Hour, Mb
+from autogoal.utils import Gb, Hour, Mb, Min
+from autogoal.utils._objective import Objective
 from autogoal.utils._process import initialize_cuda_multiprocessing
 
 logging.basicConfig(
@@ -40,7 +40,7 @@ DATA_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = DATA_DIR / "output"
 RANDOM_SEED = 42
 TIME_BUDGET = 24 * Hour
-EVAL_TIMEOUT = 1.5 * Hour
+EVAL_TIMEOUT = 30 * Min
 MEMORY_LIMIT = 16 * Gb
 
 class RANLP25Dataset:
@@ -95,7 +95,7 @@ def execute_experiment():
         input=(Seq[Sentence], Supervised[VectorCategorical]),
         output=VectorCategorical,
         registry=algorithm_registry,
-        objectives=macro_f1_plain,
+        objectives=Objective(name="f1", metric=macro_f1_plain, maximize=True),
         observations=[("Accuracy", accuracy), ("Evaluation Time", evaluation_time)],
         maximize=True,
         search_algorithm=NSPESearch,

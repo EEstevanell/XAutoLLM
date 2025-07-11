@@ -12,7 +12,6 @@ import random
 
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, precision_score, recall_score
 
 from autogoal.kb import Seq, Supervised, VectorCategorical, Sentence
@@ -20,7 +19,8 @@ from autogoal.ml import AutoML, evaluation_time, accuracy
 from autogoal.search import NSPESearch, ConsoleLogger, JsonLogger
 from autogoal_contrib import find_classes
 from autogoal.datasets.semeval_2023_task_8_1 import macro_f1_plain
-from autogoal.utils import Gb, Hour, Mb
+from autogoal.utils import Gb, Hour, Mb, Min
+from autogoal.utils._objective import Objective
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,7 +34,7 @@ DATA_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = DATA_DIR / "output"
 RANDOM_SEED = 42
 TIME_BUDGET = 24 * Hour
-EVAL_TIMEOUT = 1.5 * Hour
+EVAL_TIMEOUT = 30 * Min
 MEMORY_LIMIT = 8 * Gb
 
 class RANLP25Dataset:
@@ -86,7 +86,7 @@ def execute_experiment():
         input=(Seq[Sentence], Supervised[VectorCategorical]),
         output=VectorCategorical,
         registry=algorithm_registry,
-        objectives=macro_f1_plain,
+        objectives=Objective(name="f1", metric=macro_f1_plain, maximize=True),
         observations=[("Accuracy", accuracy), ("Evaluation Time", evaluation_time)],
         maximize=True,
         search_algorithm=NSPESearch,
@@ -94,7 +94,7 @@ def execute_experiment():
         random_state=RANDOM_SEED,
         memory_limit=MEMORY_LIMIT * Mb,
         evaluation_timeout=EVAL_TIMEOUT,
-        cross_validation_steps=1,
+        cross_validation_steps=5,
     )
 
     loggers = [ConsoleLogger(), JsonLogger(str(json_log_path))]
