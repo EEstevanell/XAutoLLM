@@ -6,14 +6,17 @@ import pandas as pd
 
 # Import the necessary modules from your project structure.
 # Adjust the module paths as needed.
-from src.data_loading import DataLoader
-from src.analysis.multi_objective._rank import AutoMLMetrics, AutoMLComparator, clean_data
-from src.analysis.multi_objective._summary import summarize_all_experiments
+from text_classification.src.data_loading import DataLoader
+from text_classification.src.analysis.multi_objective._rank import AutoMLMetrics, AutoMLComparator, clean_data
+from text_classification.src.analysis.multi_objective._summary import summarize_all_experiments
 
 def main():
     # List of datasets to analyze
-    datasets = ['liar', 'sst2', 'meld', 'ag_news']
-    loader = DataLoader('autogoal/experiments/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    datasets = ["drop", "squad"]
+    loader = DataLoader(
+        "autogoal/experiments/text_generation/configs/multi-objective/candidates.yaml",
+        "/home/coder/autogoal/experiments/text_generation/data/experience_store",
+    )
     overall_output = {}
     for dataset in datasets:
         # Load the dataset configurations and data
@@ -27,12 +30,9 @@ def main():
         # For the case of "baseline" the value is a DataFrame, and for others it is a dict.
         combined_data_dict = {}
         for key, value in dataset_dict.items():
-            if key == 'baseline':
-                combined_data_dict[key] = value
-            else:
-                for candidate, candidate_df in value.items():
-                    combined_key = f"{key} - {candidate}"
-                    combined_data_dict[combined_key] = candidate_df
+            for candidate, candidate_df in value.items():
+                combined_key = f"{key} - {candidate}"
+                combined_data_dict[combined_key] = candidate_df
         
         # Clean the data to remove any errors or invalid metrics
         clean_data(combined_data_dict)
@@ -61,7 +61,7 @@ def main():
         }
     
     # Create the output directory if it does not exist.
-    output_path = "/home/coder/autogoal/experiments/output/multi-objective-analysis/overall_results.json"
+    output_path = "/home/coder/autogoal/experiments/text_generation/output/multi-objective-analysis/overall_results.json"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # Write the overall results into a single JSON file.

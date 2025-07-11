@@ -1,5 +1,7 @@
 liar:
-  baseline: "liar"
+  baseline:
+    zeroshot: "liar"
+    knn50: "liar-knn-k50"
   low:
     liar: "liar_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
     median: "liar_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
@@ -14,7 +16,9 @@ liar:
     max: "liar_warmstart (f-pos f-neg)[F1+Time][weighted_sum] (seed_42)"
 
 sst2:
-  baseline: "sst2"
+  baseline:
+    zeroshot: "sst2"
+    knn50: "sst2-knn-k50"
   low:
     liar: "sst2_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
     median: "sst2_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
@@ -29,7 +33,9 @@ sst2:
     max: "sst2_warmstart (no-pos f-neg cos k=0.5)[F1+Time][weighted_sum] (seed_42)"
 
 meld:
-  baseline: "meld"
+  baseline:
+    zeroshot: "meld"
+    knn50: "meld-knn-k50"
   low:
     liar: "meld_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
     median: "meld_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"
@@ -44,7 +50,9 @@ meld:
     max: "meld_warmstart (f-pos f-neg)[F1+Time][logarithmic_front] (seed_42)"
 
 ag_news:
-  baseline: "ag_news"
+  baseline:
+    zeroshot: "ag_news"
+    knn50: "ag_news-knn-k50"
   low:
     liar: "ag_news_warmstart (f-pos cos k=0.5)[F1+Time] (seed_42)"
     median: "ag_news_warmstart (no-pos a-neg euc k=0.5)[F1+Time][linear_front] (seed_42)"

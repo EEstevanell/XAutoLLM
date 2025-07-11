@@ -23,7 +23,7 @@ from autogoal_transformers._generated import (
     TEXT_GEN_Mistralai_Mistral_7B_V01,
     TEXT_GEN_Facebook_Bart_Base,
     TEXT_GEN_Deepseek_Ai_Deepseek_R1_Distill_Qwen_7B,
-    TEXT_GEN_Google_T5_T5_Small
+    TEXT_GEN_Google_T5_T5_Small,
 )
 
 from autogoal.search import JsonLogger, ConsoleLogger
@@ -38,6 +38,9 @@ from autogoal.meta_learning._logging import ExperienceLogger
 import logging
 import nltk
 import numpy as np
+
+import os
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 def _compute_rouge_scores(reference_texts: List[str], prediction_texts: List[str]) -> Dict[str, float]:
     """
@@ -412,8 +415,8 @@ def main():
     os.makedirs(model_save_path, exist_ok=True)
 
     model = LoraGenLLMTask(
-        inner_model=TEXT_GEN_Meta_Llama_Llama_32_1B(),
-        lora_r=8,
+        inner_model=TEXT_GEN_Google_T5_T5_Small(),
+        lora_r=2,
         lora_alpha=8,
         lora_dropout=0.1,
         lora_bias="none",
@@ -432,7 +435,7 @@ def main():
         early_stopping_patience=6,
         num_workers="default",
         data_downsize="half",
-        quantization="bnb-8bit",
+        quantization="none",
         verbose=True,
     )
 
@@ -458,9 +461,6 @@ def main():
         X_val_instances.append(X_test_i)
     y_train_instances = np.array(y_train)[train_indices]
     y_test_instances = np.array(y_train)[val_indices]
-
-    # Always initialize model before use
-    model.init_model()
     
     # Check if checkpoint exists
     if os.path.exists(model_ckpt_path):
@@ -476,6 +476,8 @@ def main():
         
 
     if not skip_training:
+        # Always initialize model before use
+        model.init_model()
         model.eval()
         pre_predictions = model.predict(X_test[:20])
         
@@ -487,6 +489,10 @@ def main():
         
         # Train model
         model.train()
+        import gc
+        gc.collect()       # force Python GC
+        torch.cuda.empty_cache()   # release unoccupied cached blocks
+        
         train_predictions = model.run(*X_train_instances, y_train_instances)
         try:
             with open("training-predictions.json", "w") as f:

@@ -10,7 +10,7 @@ from pymoo.indicators.spacing import SpacingIndicator
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 # Import the DataLoader and WarmstartConfigParser modules from the suggested project structure.
-from src.data_loading import DataLoader
+from text_classification.src.data_loading import DataLoader
 
 @dataclass
 class AlgorithmRunMetrics:
@@ -25,7 +25,7 @@ class AutoMLMetrics:
     def calculate_all(self, current_front: np.ndarray, reference_front: np.ndarray, df: pd.DataFrame = None) -> dict:
         metrics_dict = {}
         objectives_meta = {
-            'macro_f1': {'minimize': False},
+            'f1': {'minimize': False},
             'evaluation_time': {'minimize': True}
         }
         scaler = MinMaxScaler()
@@ -41,8 +41,8 @@ class AutoMLMetrics:
             metrics_dict['spacing'] = self.calculate_spacing(current_front_norm)
             metrics_dict['coverage'] = self.calculate_coverage(current_front_norm, reference_front_norm)
         if df is not None:
-            metrics_dict['max_f1'] = df['macro_f1'].max()
-            metrics_dict['mean_f1'] = df['macro_f1'].mean()
+            metrics_dict['max_f1'] = df['f1'].max()
+            metrics_dict['mean_f1'] = df['f1'].mean()
             metrics_dict['min_eval_time'] = df['evaluation_time'].min()
             metrics_dict['mean_eval_time'] = df['evaluation_time'].mean()
         return metrics_dict
@@ -99,10 +99,10 @@ class AutoMLComparator:
     def extract_objectives(self, df: pd.DataFrame) -> np.ndarray:
         if df.empty:
             return np.array([])
-        df = df.dropna(subset=['macro_f1', 'evaluation_time'])
+        df = df.dropna(subset=['f1', 'evaluation_time'])
         if df.empty:
             return np.array([])
-        front = df[['macro_f1', 'evaluation_time']].to_numpy(copy=True)
+        front = df[['f1', 'evaluation_time']].to_numpy(copy=True)
         front[:, 0] = -1.0 * front[:, 0]
         return front
 
@@ -127,6 +127,7 @@ class AutoMLComparator:
         if len(local_front) == 0 or len(global_ref) == 0:
             return np.array([])
         result_dict = self.metrics_calculator.calculate_all(local_front, global_ref, df)
+        print(f"Algorithm: {algo_name}, HV: {result_dict['hypervolume']}")
         metric_order = self.metrics_calculator.metrics
         vect = [result_dict.get(m, 0) for m in metric_order]
         return np.array([vect])
@@ -244,12 +245,12 @@ class AutoMLComparator:
 def clean_data(data: dict):
     for config_name, df in data.items():
         df = df.replace([np.inf, -np.inf], np.nan)
-        df = df.dropna(subset=['macro_f1', 'evaluation_time'])
+        df = df.dropna(subset=['f1', 'evaluation_time'])
         data[config_name] = df
 
 def main():
     # Initialize the DataLoader with the multi-objective candidates configuration.
-    loader = DataLoader('autogoal/experiments/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    loader = DataLoader('autogoal/experiments/text_classification/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/text_classification/data/experience_store')
     
     # Run the analysis for all datasets.
     for dataset in ['liar', 'sst2', 'meld', 'ag_news']:
@@ -259,13 +260,10 @@ def main():
         
         combined_data_dict = {}
         for bias_level, candidate_dict in dataset_dict.items():
-            if bias_level == 'baseline':
-                combined_key = bias_level
-                combined_data_dict[combined_key] = candidate_dict # in this case candidate_dict is the data
-            else:
-                for candidate, candidate_data in candidate_dict.items():
-                    combined_key = f"{bias_level} - {candidate}"
-                    combined_data_dict[combined_key] = candidate_data
+            for candidate, candidate_data in candidate_dict.items():
+                combined_key = f"{bias_level} - {candidate}"
+                combined_data_dict[combined_key] = candidate_data
+                
         
         clean_data(combined_data_dict)
         metrics_calculator = AutoMLMetrics()

@@ -3,7 +3,7 @@ from autogoal.meta_learning import (
     EuclideanDistance,
     CosineDistance,
 )
-from src.data_loading.data_loader import DataLoader
+from text_classification.src.data_loading.data_loader import DataLoader
 import re
 
 class WarmstartConfigParser:

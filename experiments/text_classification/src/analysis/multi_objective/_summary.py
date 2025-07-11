@@ -6,7 +6,7 @@ from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from sklearn.preprocessing import MinMaxScaler
 
 # Import the DataLoader from your current project structure.
-from src.data_loading import DataLoader
+from text_classification.src.data_loading import DataLoader
 
 def summarize_dataframe(alias_name: str, df: pd.DataFrame) -> dict:
     """
@@ -14,17 +14,17 @@ def summarize_dataframe(alias_name: str, df: pd.DataFrame) -> dict:
     """
     df = df.copy()
     df["error"] = False
-    for col in ["macro_f1", "accuracy"]:
+    for col in ["f1"]:
         if col in df.columns:
             df["error"] |= df[col].isnull() | df[col].isin([np.inf, -np.inf])
     
-    valid_df = df[~df["error"]].copy() if "macro_f1" in df.columns else pd.DataFrame()
+    valid_df = df[~df["error"]].copy() if "f1" in df.columns else pd.DataFrame()
 
     if not valid_df.empty and "timestamp" in valid_df.columns:
         valid_df["timestamp"] = pd.to_datetime(valid_df["timestamp"], errors="coerce")
 
-    max_f1 = valid_df["macro_f1"].max() if not valid_df.empty else None
-    mean_f1 = valid_df["macro_f1"].mean() if not valid_df.empty else None
+    max_f1 = valid_df["f1"].max() if not valid_df.empty else None
+    mean_f1 = valid_df["f1"].mean() if not valid_df.empty else None
     min_eval_time = valid_df["evaluation_time"].min() if "evaluation_time" in valid_df.columns else None
     mean_eval_time = valid_df["evaluation_time"].mean() if "evaluation_time" in valid_df.columns else None
 
@@ -67,7 +67,7 @@ def export_summary_to_json(summary_df: pd.DataFrame, output_path: str) -> None:
 
 def main():
     # Initialize the DataLoader with the multi-objective candidates configuration.
-    loader = DataLoader('autogoal/experiments/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    loader = DataLoader('autogoal/experiments/text_classification/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/text_classification/data/experience_store')
     
     # Run the analysis for all datasets.
     for dataset in ['liar', 'sst2', 'meld', 'ag_news']:
@@ -78,7 +78,7 @@ def main():
         summary_df = summarize_all_experiments(data)
         print(summary_df)
         
-        export_summary_to_json(summary_df, f"autogoal/experiments/output/multi-objective-analysis/summary-{dataset}.json")
+        export_summary_to_json(summary_df, f"autogoal/experiments/text_classification/output/multi-objective-analysis/summary-{dataset}.json")
         
         print('-' * 50)
         print()

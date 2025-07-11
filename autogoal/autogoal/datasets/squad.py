@@ -125,7 +125,7 @@ def compute_squad_exact_match(
     print(f"Exact Match Score: {em_score}")
     return em_score
 
-def load(make_prompt: bool, *args, **kwargs):
+def load(make_prompt: bool = True, **kwargs):
     try:
         download("squad")
     except Exception as e:

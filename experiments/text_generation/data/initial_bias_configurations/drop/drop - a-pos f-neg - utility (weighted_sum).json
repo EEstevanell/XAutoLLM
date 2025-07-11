@@ -1,0 +1,5 @@
+{
+    "FineTuneGenLLMTask": 0.28399471805102827,
+    "LoraGenLLMTask": 0.17999999999999938,
+    "PartialFineTuneGenLLMTask": 0.5977799252700138
+}

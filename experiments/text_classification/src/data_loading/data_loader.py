@@ -44,19 +44,26 @@ class DataLoader:
                     timestamp = self.parse_timestamp(date_folder, json_file)
                     if timestamp is None:
                         continue
-                    # Extract metrics from content
-                    macro_f1 = content.get('f1', np.nan)
-                    accuracy = content.get('accuracy', np.nan)
-                    evaluation_time = content.get('evaluation_time', np.nan)
+
+                    # --- Extract metrics from the new Experience format ---
+                    # Metrics are now in content['metrics'] as a list of dicts with 'name' and 'value'
+                    metrics_list = content.get('metrics', [])
+                    metrics_dict = {m.get('name'): m.get('value', np.nan) for m in metrics_list if isinstance(m, dict) and 'name' in m}
+                    f1 = metrics_dict.get('f1', np.nan)
+                    accuracy = metrics_dict.get('accuracy', metrics_dict.get('Accuracy', np.nan))
+                    evaluation_time = metrics_dict.get('evaluation_time', np.nan)
+
+                    # --- Algorithm extraction remains the same ---
                     algorithm = dict(content["algorithms"][0])
                     finetuning_method = list(algorithm)[0]
                     llm = list(algorithm[finetuning_method]["inner_model"]["value"])[0]
                     params = list(algorithm[finetuning_method])[1:]
+
                     # Append to data list
                     data.append({
                         'alias': alias,
                         'timestamp': timestamp,
-                        'macro_f1': macro_f1,
+                        'f1': f1,
                         'accuracy': accuracy,
                         'evaluation_time': evaluation_time,
                         'finetuning_method': finetuning_method,
@@ -84,22 +91,22 @@ class DataLoader:
             print(f"Timestamp parsing error for {datetime_str}: {ve}")
             return None
 
-    def load_all_data_for_dataset(self, dataset: str) -> Dict[str, pd.DataFrame]:
+    def load_all_data_for_dataset(self, dataset: str) -> Dict[str, dict]:
         """
-        This method is used for multi-objective experiments.
-        The config structure for multi-objective experiments is expected to have a nested structure.
+        Loads all data for a dataset, returning a nested dict: {complexity: {method: DataFrame}} for all levels, including baseline.
+        This ensures a consistent structure for downstream analysis.
         """
         dataset_configs = self.get_dataset_configs(dataset)
         all_data = {}
-        for complexity in dataset_configs:
+        for complexity, methods in dataset_configs.items():
             all_data[complexity] = {}
-            if complexity == "baseline":
-                alias_name = dataset_configs[complexity]
-                all_data[complexity] = self.load_data_for_alias(alias_name)
-            else:
-                for method in dataset_configs[complexity]:
-                    alias_name = dataset_configs[complexity][method]
+            # methods should always be a dict mapping method names to aliases
+            if isinstance(methods, dict):
+                for method, alias_name in methods.items():
                     all_data[complexity][method] = self.load_data_for_alias(alias_name)
+            else:
+                # fallback: if not a dict, treat as a single alias (should not happen in your config)
+                all_data[complexity][str(methods)] = self.load_data_for_alias(methods)
         return all_data
 
     def load_all_data_for_single_objective_dataset(self, dataset: str) -> Dict[str, List[pd.DataFrame]]:
@@ -127,13 +134,13 @@ class DataLoader:
 
 if __name__ == "__main__":
     # Example usage for multi-objective experiments
-    multi_objective_loader = DataLoader('/home/coder/autogoal/experiments/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    multi_objective_loader = DataLoader('/home/coder/autogoal/experiments/text_classification/configs/multi-objective/candidates.yaml', '/home/coder/autogoal/experiments/text_classification/data/experience_store')
     liar_data_all_configs = multi_objective_loader.load_all_data_for_dataset('liar')
     print("Multi-objective data loaded:")
     print(liar_data_all_configs)
     
     # Example usage for single-objective experiments
-    single_objective_loader = DataLoader('/home/coder/autogoal/experiments/configs/single-objective/candidates.yaml', '/home/coder/autogoal/experiments/data/experience_store')
+    single_objective_loader = DataLoader('/home/coder/autogoal/experiments/text_classification/configs/single-objective/candidates.yaml', '/home/coder/autogoal/experiments/text_classification/data/experience_store')
     liar_single_objective_data = single_objective_loader.load_all_data_for_single_objective_dataset('liar')
     print("Single-objective data loaded:")
     print(liar_single_objective_data)

@@ -1,0 +1,120 @@
+{
+    "algorithms": [
+        {
+            "PartialFineTuneLLMEmbeddingClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Word],Tensor[1, Continuous, None]]",
+                    "value": {
+                        "WORD_EMB_Google_Electra_Small_Discriminator": {}
+                    }
+                },
+                "num_trainable_layers": {
+                    "value": 4
+                },
+                "batch_size": {
+                    "value": 8
+                },
+                "max_length": {
+                    "value": 900
+                },
+                "learning_rate": {
+                    "value": 2e-05
+                },
+                "epochs": {
+                    "value": 10
+                },
+                "warmup_steps": {
+                    "value": 0
+                },
+                "weight_decay": {
+                    "value": 0.1
+                },
+                "optimizer": {
+                    "value": "adam"
+                },
+                "dropout_rate": {
+                    "value": 0.5
+                },
+                "gradient_accumulation_steps": {
+                    "value": 1
+                },
+                "lr_scheduler": {
+                    "value": "constant"
+                },
+                "early_stopping_delta": {
+                    "value": 0.001
+                },
+                "use_mixed_precision": {
+                    "value": false
+                },
+                "use_gradient_clipping": {
+                    "value": false
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 5.0
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "default"
+                }
+            }
+        }
+    ],
+    "task_features": {
+        "meta": [
+            120000.0,
+            4.0,
+            2.0,
+            0.25,
+            0.25,
+            1.0,
+            236.477525,
+            66.50946420027535,
+            0.281250677840422,
+            0.0
+        ],
+        "semantic": null
+    },
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70806884765625,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2025-05-16 15:11:07",
+    "alias": "ag_news-knn-k25",
+    "cross_val_steps": null,
+    "metrics": [
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.1
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 1282.6337296962738
+        },
+        {
+            "name": "time_train_mean_seconds",
+            "maximize": false,
+            "value": 1178.7396113872528
+        },
+        {
+            "name": "time_valid_mean_seconds",
+            "maximize": false,
+            "value": 103.89411091804504
+        },
+        {
+            "name": "Accuracy",
+            "maximize": true,
+            "value": 0.25
+        }
+    ],
+    "error": null
+}
