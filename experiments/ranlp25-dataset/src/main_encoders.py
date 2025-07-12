@@ -14,7 +14,7 @@ import numpy as np
 from sklearn.metrics import f1_score, precision_score, recall_score
 
 import torch
-from autogoal.kb import Seq, Supervised, VectorCategorical, Sentence
+from autogoal.kb import Seq, Supervised, VectorDiscrete, Sentence
 from autogoal.ml import AutoML, evaluation_time, accuracy
 from autogoal.search import NSPESearch, ConsoleLogger, JsonLogger
 from autogoal_contrib import find_classes
@@ -39,8 +39,8 @@ EXPERIMENT_ID = f"ranlp25_encoders_{int(time.time())}"
 DATA_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = DATA_DIR / "output"
 RANDOM_SEED = 42
-TIME_BUDGET = 24 * Hour
-EVAL_TIMEOUT = 30 * Min
+TIME_BUDGET = 12 * Hour
+EVAL_TIMEOUT = 60 * Min
 MEMORY_LIMIT = 16 * Gb
 
 class RANLP25Dataset:
@@ -92,11 +92,11 @@ def execute_experiment():
     preds_path = OUTPUT_DIR / f"{EXPERIMENT_ID}_test_predictions.json"
 
     automl = AutoML(
-        input=(Seq[Sentence], Supervised[VectorCategorical]),
-        output=VectorCategorical,
+        input=(Seq[Sentence], Supervised[VectorDiscrete]),
+        output=VectorDiscrete,
         registry=algorithm_registry,
         objectives=Objective(name="f1", metric=macro_f1_plain, maximize=True),
-        observations=[("Accuracy", accuracy), ("Evaluation Time", evaluation_time)],
+        observations=[("Accuracy", accuracy)],
         maximize=True,
         search_algorithm=NSPESearch,
         search_timeout=TIME_BUDGET,

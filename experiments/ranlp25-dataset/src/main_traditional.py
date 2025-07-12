@@ -33,7 +33,7 @@ EXPERIMENT_ID = f"ranlp25_traditional_{int(time.time())}"
 DATA_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = DATA_DIR / "output"
 RANDOM_SEED = 42
-TIME_BUDGET = 24 * Hour
+TIME_BUDGET = 12 * Hour
 EVAL_TIMEOUT = 30 * Min
 MEMORY_LIMIT = 8 * Gb
 
@@ -88,7 +88,7 @@ def execute_experiment():
         output=VectorCategorical,
         registry=algorithm_registry,
         objectives=Objective(name="f1", metric=macro_f1_plain, maximize=True),
-        observations=[("Accuracy", accuracy), ("Evaluation Time", evaluation_time)],
+        observations=[("Accuracy", accuracy)],
         maximize=True,
         search_algorithm=NSPESearch,
         search_timeout=TIME_BUDGET,
