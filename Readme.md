@@ -3,7 +3,6 @@
 XAutoLM is the official public release of the system described in the paper "XAutoLM: Efficient Fine-Tuning of Language Models via Meta-Learning and AutoML," accepted for presentation at EMNLP 2025. The toolkit extends [AutoGOAL](https://github.com/autogoal/autogoal) with meta-learning warm starts aimed at reducing the search cost of language model fine-tuning across both text-classification and text-generation tasks. The repository ships the full experimental pipeline, pretrained experience stores, and the datasets used in the publication.
 
 **Preprint (arXiv):** <https://arxiv.org/abs/2508.00924>  
-**Camera-ready draft:** [docs/EMNLP_2025_XAutoLM.pdf](docs/EMNLP_2025_XAutoLM.pdf)
 
 ## Highlights
 
