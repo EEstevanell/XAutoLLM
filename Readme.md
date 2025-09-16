@@ -1,17 +1,13 @@
 # XAutoLM: Meta-Learning Enhanced AutoML for Resource-Efficient Language Model Fine-Tuning
 
 This repository contains the implementation of our paper submitted to ACL 2025.
-
-> **Note**: This is an anonymous repository for peer review purposes, available at:  
-> https://anonymous.4open.science/r/XAutoLLM-A010
-
-XAutoLLM is built upon [AutoGOAL](https://github.com/autogoal/autogoal), an automatic machine learning toolkit. We extend AutoGOAL's capabilities with meta-learning mechanisms specifically designed for Language Model fine-tuning optimization.
+XAutoLM is built upon [AutoGOAL](https://github.com/autogoal/autogoal), an automatic machine learning toolkit. We extend AutoGOAL's capabilities with meta-learning mechanisms specifically designed for Language Model fine-tuning optimization.
 
 ## Abstract
 
 Experts in machine learning distinguish themselves from amateurs by leveraging domain knowledge to effectively navigate the myriad decisions involved in model selection and hyperparameter optimisation. This distinction is especially critical for Language Models (LMs), whose repeated fine-tuning trials incur substantial computational overhead and raise environmental concerns. Yet, no single AutoML framework simultaneously addresses both model selection and hyperparameter optimisation for resource-efficient LM fine-tuning.
 
-We propose XAutoLLM, which integrates meta-learning to warm start the search space. By drawing on task- and system-level meta-features, XAutoLLM reuses insights from previously tuned LMs on related tasks, enabling resource-friendly, Green AI fine-tuning that balances state-of-the-art outcomes with minimised computational overhead.
+We propose XAutoLM, which integrates meta-learning to warm start the search space. By drawing on task- and system-level meta-features, XAutoLM reuses insights from previously tuned LMs on related tasks, enabling resource-friendly, Green AI fine-tuning that balances state-of-the-art outcomes with minimised computational overhead.
 
 ## Requirements
 
@@ -69,7 +65,7 @@ For more granular control:
 ## Project Structure
 
 ```
-XAutoLLM/
+XAutoLM/
 ├── autogoal/           # Core AutoML framework (forked from AutoGOAL)
 ├── experiments/        # Experimental framework and results
 │   ├── configs/       # Experiment configurations
@@ -82,5 +78,6 @@ XAutoLLM/
 ## Acknowledgments
 
 This work builds upon [AutoGOAL](https://github.com/autogoal/autogoal). We thank the original authors for their foundational work in automated machine learning.
+
 
 
