@@ -1,0 +1,119 @@
+{
+    "algorithms": [
+        {
+            "LoraGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Mistralai_Mixtral_8X7B_Instruct_V01": {}
+                    }
+                },
+                "lora_r": {
+                    "value": 1
+                },
+                "lora_alpha": {
+                    "value": 16
+                },
+                "lora_dropout": {
+                    "value": 0.2
+                },
+                "lora_bias": {
+                    "value": "all"
+                },
+                "batch_size": {
+                    "value": 4
+                },
+                "max_length": {
+                    "value": 1024
+                },
+                "learning_rate": {
+                    "value": 5e-06
+                },
+                "epochs": {
+                    "value": 3
+                },
+                "warmup_steps": {
+                    "value": 500
+                },
+                "weight_decay": {
+                    "value": 0.01
+                },
+                "optimizer": {
+                    "value": "adagrad"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 1
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "model_save": {
+                    "value": "classifier"
+                },
+                "fan_in_fan_out": {
+                    "value": false
+                },
+                "early_stopping_delta": {
+                    "value": 0.005
+                },
+                "use_mixed_precision": {
+                    "value": false
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 1.0
+                },
+                "class_weighted_loss": {
+                    "value": false
+                },
+                "num_workers": {
+                    "value": "3/4"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11098.0,
+        7.0,
+        2.2308658494209044,
+        0.02640115336096594,
+        0.46675076590376646,
+        0.056563706563706566,
+        40.49594521535412,
+        31.847622649718772,
+        0.7864397899680011,
+        0.4905389571635628
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-31 06:47:30",
+    "alias": "meld_id:9-rd:42 (rn:42)",
+    "cross_val_steps": null,
+    "error": "You are trying to access a gated repo.\nMake sure to have access to it at https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1.\n401 Client Error. (Request ID: Root=1-6773930c-0be3fae6748da4bc354525e5;3eecfd3b-4c7f-432f-97a0-50108f7c8fc5)\n\nCannot access gated repo for url https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1/resolve/main/config.json.\nAccess to model mistralai/Mixtral-8x7B-Instruct-v0.1 is restricted. You must have access to it and be authenticated to access it. Please log in.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

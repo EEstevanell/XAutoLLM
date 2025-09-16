@@ -1,0 +1,120 @@
+{
+    "algorithms": [
+        {
+            "PartialFineTuneLLMEmbeddingClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Word],Tensor[1, Continuous, None]]",
+                    "value": {
+                        "WORD_EMB_Distilbert_Base_Uncased": {}
+                    }
+                },
+                "num_trainable_layers": {
+                    "value": 4
+                },
+                "batch_size": {
+                    "value": 128
+                },
+                "max_length": {
+                    "value": 500
+                },
+                "learning_rate": {
+                    "value": 5e-06
+                },
+                "epochs": {
+                    "value": 1
+                },
+                "warmup_steps": {
+                    "value": 2000
+                },
+                "weight_decay": {
+                    "value": 0.001
+                },
+                "optimizer": {
+                    "value": "adamw"
+                },
+                "dropout_rate": {
+                    "value": 0.3
+                },
+                "gradient_accumulation_steps": {
+                    "value": 8
+                },
+                "lr_scheduler": {
+                    "value": "linear"
+                },
+                "early_stopping_delta": {
+                    "value": 0.005
+                },
+                "use_mixed_precision": {
+                    "value": true
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 1.0
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "default"
+                }
+            }
+        }
+    ],
+    "task_features": {
+        "meta": [
+            11098.0,
+            7.0,
+            2.230865850430791,
+            0.02640115336096594,
+            0.46675076590376646,
+            0.056563706563706566,
+            40.49594521535412,
+            31.847622649718772,
+            0.7864397899680011,
+            0.0
+        ],
+        "semantic": null
+    },
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70806884765625,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2025-05-18 05:34:29",
+    "alias": "meld-knn-k50",
+    "cross_val_steps": null,
+    "metrics": [
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.0469986945827282
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": 71.59779119491577
+        },
+        {
+            "name": "time_train_mean_seconds",
+            "maximize": false,
+            "value": 39.00636172294617
+        },
+        {
+            "name": "time_valid_mean_seconds",
+            "maximize": false,
+            "value": 32.59142327308655
+        },
+        {
+            "name": "Accuracy",
+            "maximize": true,
+            "value": 0.11755862898376428
+        }
+    ],
+    "error": null
+}

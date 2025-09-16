@@ -1,8 +1,11 @@
+
 import io
 import os
 import shutil
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Callable, Optional, Any, Union
+from dataclasses import dataclass
+from autogoal.utils._objective import Objective
 from deprecated import deprecated
 import dill as pickle
 
@@ -14,7 +17,7 @@ from autogoal.ml.metrics import (
     supervised_fitness_fn_moo,
     unsupervised_fitness_fn_moo,
 )
-from autogoal.search import PESearch
+from autogoal.search import NSPESearch
 from autogoal.utils import (
     generate_production_dockerfile,
     nice_repr,
@@ -32,6 +35,7 @@ class AutoML:
     algorithm, that can be applied to any input and output.
     """
 
+
     def __init__(
         self,
         input=None,
@@ -47,15 +51,15 @@ class AutoML:
         cross_validation_steps=3,
         stratified_cross_validation=True,
         registry=None,
-        objectives=None,
+        objectives: Optional[Union[List[Objective], dict, None]] = None,
         observations=None,
-        remote_sources: List[Tuple[str, int] or str] = None, # type: ignore
+        remote_sources: Optional[List[Union[Tuple[str, int], str]]] = None,
         max_list_depth=1,
         **search_kwargs,
     ):
         self.input = input
         self.output = output
-        self.search_algorithm = search_algorithm or PESearch
+        self.search_algorithm = search_algorithm or NSPESearch
         self.search_iterations = search_iterations
         self.include_filter = include_filter
         self.exclude_filter = exclude_filter
@@ -66,7 +70,7 @@ class AutoML:
         self.stratified_cross_validation = stratified_cross_validation
         self.registry = registry
         self.random_state = random_state
-        self.objectives = objectives or accuracy
+        self.objectives = self._process_objectives(objectives)
         self.observations = observations or []
         self.remote_sources = remote_sources
         self.search_kwargs = search_kwargs
@@ -74,12 +78,66 @@ class AutoML:
         self.export_path = None
         self.max_list_depth = max_list_depth
 
-        # If objectives were not specified as iterables then create the correct objectives object
-        if not hasattr(objectives, '__iter__'):
-            self.objectives = (self.objectives,)
-
         if random_state:
             np.random.seed(random_state)
+
+    def _process_objectives(self, objectives):
+        """
+        Accepts:
+        - None (defaults to accuracy)
+        - Objective instance
+        - dict with keys: name, metric, maximize (or just name, metric)
+        - list of Objective
+        - list of dicts (with keys: name, metric, maximize)
+        - dict in the old style {name: metric} or {name: (metric, maximize)}
+        Returns a list of Objective objects.
+        """
+        if objectives is None:
+            return [Objective(name="accuracy", metric=accuracy, maximize=True)]
+
+        # Single Objective instance
+        if isinstance(objectives, Objective):
+            return [objectives]
+
+        # Single dict with keys: name, metric, (optional) maximize
+        if isinstance(objectives, dict):
+            # If it looks like {name: metric} or {name: (metric, maximize)}
+            if all(isinstance(k, str) and (callable(v) or isinstance(v, tuple)) for k, v in objectives.items()):
+                result = []
+                for name, value in objectives.items():
+                    if isinstance(value, tuple):
+                        metric, maximize = value
+                    else:
+                        metric = value
+                        maximize = True
+                    result.append(Objective(name=name, metric=metric, maximize=maximize))
+                return result
+            # If it looks like a single dict objective: {"name": ..., "metric": ..., "maximize": ...}
+            if "name" in objectives and "metric" in objectives:
+                return [Objective(
+                    name=objectives["name"],
+                    metric=objectives["metric"],
+                    maximize=objectives.get("maximize", True)
+                )]
+            raise ValueError("Invalid dict format for objectives. Must be either {name: metric} or {name: (metric, maximize)} or a dict with keys 'name' and 'metric'.")
+
+        # List of Objective or list of dicts
+        if isinstance(objectives, list):
+            result = []
+            for obj in objectives:
+                if isinstance(obj, Objective):
+                    result.append(obj)
+                elif isinstance(obj, dict) and "name" in obj and "metric" in obj:
+                    result.append(Objective(
+                        name=obj["name"],
+                        metric=obj["metric"],
+                        maximize=obj.get("maximize", True)
+                    ))
+                else:
+                    raise ValueError("Each item in objectives list must be an Objective or a dict with keys 'name' and 'metric'.")
+            return result
+
+        raise ValueError("objectives must be None, an Objective, a dict, a list of Objective, or a list of dicts.")
 
     def _check_fitted(self):
         if not hasattr(self, "best_pipelines_"):
@@ -130,6 +188,7 @@ class AutoML:
             self.make_fitness_fn(X, y),
             random_state=self.random_state,
             errors=self.errors,
+            objectives=self.objectives,
             **self.search_kwargs,
         )
 
@@ -276,23 +335,25 @@ class AutoML:
     def score(self, X, y=None, solution_index=None):
         """
         Compute the score of the best pipelines on the given dataset.
+        Returns a list of tuples (name, score, maximize) for each objective.
         """
         self._check_fitted()
 
         scores = []
         if solution_index is None:
             for pipeline in self.best_pipelines_:
-                
                 y_pred = pipeline.run(*X, np.zeros_like(y) if y else None) if isinstance(X, tuple) else pipeline.run(X, np.zeros_like(y) if y else None)
-                scores.append(
-                    tuple([objective(y or X, y_pred) for objective in self.objectives])
-                )
+                scores.append([
+                    (obj.name, obj.metric(y or X, y_pred), obj.maximize)
+                    for obj in self.objectives
+                ])
         else:
             pipeline = self.best_pipelines_[0]
             y_pred = pipeline.run(*X, np.zeros_like(y) if y else None) if isinstance(X, tuple) else pipeline.run(X, np.zeros_like(y) if y else None)
-            scores.append(
-                tuple([objective(y or X, y_pred) for objective in self.objectives])
-            )
+            scores.append([
+                (obj.name, obj.metric(y or X, y_pred), obj.maximize)
+                for obj in self.objectives
+            ])
 
         return scores
     
@@ -315,10 +376,13 @@ class AutoML:
         if not y is None:
             y = np.array(y, dtype=list)
 
+        # Pass only the metric functions to the fitness fn, but keep maximize info for later use if needed
+        objectives_metrics = [obj.metric for obj in self.objectives]
+
         inner_fitness_fn = (
-            unsupervised_fitness_fn_moo(self.objectives)
+            unsupervised_fitness_fn_moo(objectives_metrics)
             if y is None
-            else supervised_fitness_fn_moo(self.objectives, self.observations)
+            else supervised_fitness_fn_moo(objectives_metrics, self.observations)
         )
 
         def fitness_fn(pipeline):
@@ -387,11 +451,11 @@ class AutoML:
         makefile.write(
             """
 build:
-	docker build --file ./dockerfile -t autogoal:production .
-	docker save -o autogoal-prod.tar autogoal:production
+    docker build --file ./dockerfile -t autogoal:production .
+    docker save -o autogoal-prod.tar autogoal:production
 
 serve: build
-	docker run -p 8000:8000 autogoal:production
+    docker run -p 8000:8000 autogoal:production
 
         """
         )

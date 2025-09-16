@@ -1,0 +1,104 @@
+{
+    "algorithms": [
+        {
+            "FineTuneGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Google_Flan_T5_Xxl": {}
+                    }
+                },
+                "batch_size": {
+                    "value": 256
+                },
+                "max_length": {
+                    "value": 128
+                },
+                "learning_rate": {
+                    "value": 5e-06
+                },
+                "epochs": {
+                    "value": 5
+                },
+                "warmup_steps": {
+                    "value": 100
+                },
+                "weight_decay": {
+                    "value": 0.005
+                },
+                "dropout_rate": {
+                    "value": 0.2
+                },
+                "optimizer": {
+                    "value": "sgd"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 2
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "early_stopping_delta": {
+                    "value": 0.001
+                },
+                "use_mixed_precision": {
+                    "value": true
+                },
+                "use_gradient_clipping": {
+                    "value": false
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 0.5
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "1/4"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11524.0,
+        6.0,
+        2.53531547347489,
+        0.08287053106560222,
+        0.20496355432141616,
+        0.40431837425910244,
+        106.8957827143353,
+        58.412516010214105,
+        0.5464435969968409,
+        0.22448726349722822
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-23 12:30:57",
+    "alias": "liar_warmstart_id:(f-pos + a-neg)[F1+Time]-rd:42 (rn:42)",
+    "cross_val_steps": null,
+    "error": "[enforce fail at alloc_cpu.cpp:117] err == 0. DefaultCPUAllocator: can't allocate memory: you tried to allocate 67108864 bytes. Error code 12 (Cannot allocate memory)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

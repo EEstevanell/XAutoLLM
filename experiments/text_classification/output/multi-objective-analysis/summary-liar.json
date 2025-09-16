@@ -1,0 +1,122 @@
+[
+  {
+    "alias_name":"baseline - zeroshot",
+    "max_f1":0.2689305244,
+    "mean_f1":0.1067313449,
+    "min_evaluation_time":12.972214222,
+    "mean_evaluation_time":540.8458018959,
+    "num_evaluations":336,
+    "num_errors":236,
+    "error_rate":0.7023809524
+  },
+  {
+    "alias_name":"baseline - knn25",
+    "max_f1":0.2432230711,
+    "mean_f1":0.1049235779,
+    "min_evaluation_time":41.8453798294,
+    "mean_evaluation_time":545.7645258109,
+    "num_evaluations":119,
+    "num_errors":59,
+    "error_rate":0.4957983193
+  },
+  {
+    "alias_name":"baseline - knn50",
+    "max_f1":0.2479174891,
+    "mean_f1":0.1015988648,
+    "min_evaluation_time":28.3124985695,
+    "mean_evaluation_time":451.8026637052,
+    "num_evaluations":240,
+    "num_errors":106,
+    "error_rate":0.4416666667
+  },
+  {
+    "alias_name":"low - liar",
+    "max_f1":0.2604542621,
+    "mean_f1":0.100526587,
+    "min_evaluation_time":16.3031591177,
+    "mean_evaluation_time":480.3467207218,
+    "num_evaluations":197,
+    "num_errors":138,
+    "error_rate":0.7005076142
+  },
+  {
+    "alias_name":"low - median",
+    "max_f1":0.2525276161,
+    "mean_f1":0.0995073538,
+    "min_evaluation_time":31.9250229597,
+    "mean_evaluation_time":380.9136945746,
+    "num_evaluations":220,
+    "num_errors":152,
+    "error_rate":0.6909090909
+  },
+  {
+    "alias_name":"low - max",
+    "max_f1":0.2593282824,
+    "mean_f1":0.0950492244,
+    "min_evaluation_time":21.290307641,
+    "mean_evaluation_time":410.0452006552,
+    "num_evaluations":190,
+    "num_errors":126,
+    "error_rate":0.6631578947
+  },
+  {
+    "alias_name":"moderate - liar",
+    "max_f1":0.2624529753,
+    "mean_f1":0.1094630738,
+    "min_evaluation_time":36.1102871895,
+    "mean_evaluation_time":462.2522024589,
+    "num_evaluations":132,
+    "num_errors":70,
+    "error_rate":0.5303030303
+  },
+  {
+    "alias_name":"moderate - median",
+    "max_f1":0.2423061494,
+    "mean_f1":0.1003582431,
+    "min_evaluation_time":13.8546181917,
+    "mean_evaluation_time":469.897318493,
+    "num_evaluations":146,
+    "num_errors":90,
+    "error_rate":0.6164383562
+  },
+  {
+    "alias_name":"moderate - max",
+    "max_f1":0.2545817873,
+    "mean_f1":0.0886046727,
+    "min_evaluation_time":44.0064343214,
+    "mean_evaluation_time":516.5370763769,
+    "num_evaluations":121,
+    "num_errors":48,
+    "error_rate":0.3966942149
+  },
+  {
+    "alias_name":"high - liar",
+    "max_f1":0.2506056,
+    "mean_f1":0.1007419308,
+    "min_evaluation_time":6.2614148855,
+    "mean_evaluation_time":153.1341894698,
+    "num_evaluations":302,
+    "num_errors":30,
+    "error_rate":0.0993377483
+  },
+  {
+    "alias_name":"high - median",
+    "max_f1":0.2576004004,
+    "mean_f1":0.108216057,
+    "min_evaluation_time":9.5005363226,
+    "mean_evaluation_time":277.2164305208,
+    "num_evaluations":193,
+    "num_errors":64,
+    "error_rate":0.3316062176
+  },
+  {
+    "alias_name":"high - max",
+    "max_f1":0.2605952108,
+    "mean_f1":0.096082824,
+    "min_evaluation_time":12.4573123455,
+    "mean_evaluation_time":252.470452275,
+    "num_evaluations":208,
+    "num_errors":52,
+    "error_rate":0.25
+  }
+]

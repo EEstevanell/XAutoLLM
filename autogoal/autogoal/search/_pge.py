@@ -1,9 +1,6 @@
-import statistics
-import abc
-
-from typing import Mapping, Optional, Dict, List, Sequence
+from typing import Optional, Dict, List
 from autogoal.sampling import ModelSampler, best_indices, merge_updates, update_model
-from ._base import SearchAlgorithm
+from autogoal.search._base import SearchAlgorithm
 
 import random
 

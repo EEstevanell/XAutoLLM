@@ -1,0 +1,107 @@
+{
+    "algorithms": [
+        {
+            "PartialFineTuneGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Google_T5_T5_Small": {}
+                    }
+                },
+                "num_trainable_layers": {
+                    "value": 64
+                },
+                "batch_size": {
+                    "value": 256
+                },
+                "max_length": {
+                    "value": 256
+                },
+                "learning_rate": {
+                    "value": 5e-05
+                },
+                "epochs": {
+                    "value": 2
+                },
+                "warmup_steps": {
+                    "value": 2000
+                },
+                "weight_decay": {
+                    "value": 0.1
+                },
+                "optimizer": {
+                    "value": "adagrad"
+                },
+                "dropout_rate": {
+                    "value": 0.5
+                },
+                "gradient_accumulation_steps": {
+                    "value": 1
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "early_stopping_delta": {
+                    "value": 0.01
+                },
+                "use_mixed_precision": {
+                    "value": true
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 1.0
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "3/4"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11524.0,
+        6.0,
+        2.53531547347489,
+        0.08287053106560222,
+        0.20496355432141616,
+        0.40431837425910244,
+        106.8957827143353,
+        58.412516010214105,
+        0.5464435969968409,
+        0.22448726349722822
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2025-01-12 19:00:46",
+    "alias": "liar_warmstart_id:(f-pos + a-neg)-rd:707 (rn:707)",
+    "cross_val_steps": null,
+    "error": "CUDA out of memory. Tried to allocate 512.00 MiB. GPU 0 has a total capacity of 23.64 GiB of which 345.56 MiB is free. Process 3447958 has 23.30 GiB memory in use. Of the allocated memory 23.07 GiB is allocated by PyTorch, and 27.47 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

@@ -1,0 +1,122 @@
+{
+    "algorithms": [
+        {
+            "LoraLLMEmbeddingClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Word],Tensor[1, Continuous, None]]",
+                    "value": {
+                        "WORD_EMB_Bert_Base_Cased": {}
+                    }
+                },
+                "lora_r": {
+                    "value": 26
+                },
+                "lora_alpha": {
+                    "value": 16
+                },
+                "lora_dropout": {
+                    "value": 0.0
+                },
+                "lora_bias": {
+                    "value": "all"
+                },
+                "batch_size": {
+                    "value": 2
+                },
+                "max_length": {
+                    "value": 1024
+                },
+                "learning_rate": {
+                    "value": 0.0001
+                },
+                "epochs": {
+                    "value": 2
+                },
+                "warmup_steps": {
+                    "value": 1000
+                },
+                "weight_decay": {
+                    "value": 0.01
+                },
+                "optimizer": {
+                    "value": "sgd"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 4
+                },
+                "lr_scheduler": {
+                    "value": "cosine_with_restarts"
+                },
+                "model_save": {
+                    "value": "classifier"
+                },
+                "init_lora_weights": {
+                    "value": "loftq"
+                },
+                "fan_in_fan_out": {
+                    "value": true
+                },
+                "early_stopping_delta": {
+                    "value": 0.005
+                },
+                "use_mixed_precision": {
+                    "value": false
+                },
+                "use_gradient_clipping": {
+                    "value": false
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 5.0
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "default"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11524.0,
+        6.0,
+        2.53531547347489,
+        0.08287053106560222,
+        0.20496355432141616,
+        0.40431837425910244,
+        106.8957827143353,
+        58.412516010214105,
+        0.5464435969968409,
+        0.22448726349722822
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2025-01-12 23:30:33",
+    "alias": "liar_warmstart_id:(f-pos + a-neg)-rd:707 (rn:707)",
+    "cross_val_steps": null,
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": 0.19745222929936307
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": 0.11526923751600965
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

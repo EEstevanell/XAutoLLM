@@ -1,5 +1,7 @@
 import errno
 import functools
+from typing import List
+from autogoal.utils._objective import Objective
 import enlighten
 import time
 import datetime
@@ -16,7 +18,6 @@ from autogoal.utils import (
     RestrictedWorkerByJoin,
     Min,
     Gb,
-    is_cuda_multiprocessing_enabled,
 )
 from autogoal.sampling import ReplaySampler
 from autogoal.datasets import clean_temporary_datasets
@@ -32,7 +33,7 @@ class SearchAlgorithm:
         generator_fn=None,
         fitness_fn=None,
         pop_size=20,
-        maximize=(True,),
+        objectives=List[Objective],
         errors="raise",
         early_stop=0.5,
         evaluation_timeout: int = 1 * Min,
@@ -42,6 +43,7 @@ class SearchAlgorithm:
         allow_duplicates=True,
         logger=None,
         ranking_fn=None,
+        **kwargs
     ):
         if generator_fn is None and fitness_fn is None:
             raise ValueError("You must provide either `generator_fn` or `fitness_fn`")
@@ -50,10 +52,9 @@ class SearchAlgorithm:
         self._fitness_fn = fitness_fn or (lambda x: x)
         self._pop_size = pop_size
 
-        # double check for several objectives
-        self._maximize = (
-            maximize if isinstance(maximize, (tuple, list)) else (maximize,)
-        )
+        self._objectives = objectives
+        self._objectives_names = [obj.name for obj in objectives]
+        self._maximize = [obj.maximize for obj in self._objectives]
 
         self._errors = errors
         self._evaluation_timeout = evaluation_timeout
@@ -166,7 +167,13 @@ class SearchAlgorithm:
                             logger.end(best_solutions, best_fns)
                             raise e from None
 
-                    logger.eval_solution(solution_keepsake, fn, observations)
+                    logger.eval_solution(
+                        solution_keepsake,
+                        fn,
+                        observations,
+                        self._objectives_names,
+                        self._maximize,
+                    )
                     solutions.append(solution_keepsake)
                     fns.append(fn)
 
@@ -344,7 +351,7 @@ class Logger:
     def sample_solution(self, solution):
         pass
 
-    def eval_solution(self, solution, fitness,  observations):
+    def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
         pass
 
     def error(self, e: Exception, solution):
@@ -434,22 +441,37 @@ class ConsoleLogger(Logger):
         print(self.emph("Evaluating pipeline:"))
         print(solution)
 
-    def eval_solution(self, solution, fitness, observations):
+    def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
         try:
-            if not observations is None:
-                train_m_time = statistics.mean(observations["time"]["train"])
-                valid_m_time = statistics.mean(observations["time"]["valid"])
-                train_m_time_value = (train_m_time, "seconds") if train_m_time < 12000 else (train_m_time/60, "minutes")
-                valid_m_time_value = (valid_m_time, "seconds") if valid_m_time < 12000 else (valid_m_time/60, "minutes")
-                
-            print(f"observations: {observations}")
-            time_obs_message = f"(train mean time: {train_m_time_value[0]} {train_m_time_value[1]}, valid mean time: {valid_m_time_value[0]} {valid_m_time_value[1]})" if not observations is None else ""
-            other_obs_message = [f"other observations:\nMean {label}={value}" for label,value in observations.items() if label != 'time' and label != 'resource_stats'] if not observations is None else ""
-                
-            if len(fitness) > 1:
-                print(self.primary(f"Fitness={fitness} {time_obs_message}\n{other_obs_message}"))
+            # Defensive lists
+            if not isinstance(fitness, (list, tuple)):
+                fitness = [fitness]
+            # Align names and maximize flags
+            names = list(objective_names) if isinstance(objective_names, (list, tuple)) else [f"objective_{i}" for i in range(len(fitness))]
+            flags = list(objective_maximize) if isinstance(objective_maximize, (list, tuple)) else [True] * len(fitness)
+            # Pad or trim to fitness length
+            if len(names) < len(fitness): names += [f"objective_{i}" for i in range(len(names), len(fitness))]
+            if len(flags) < len(fitness): flags += [True] * (len(fitness) - len(flags))
+            names, flags = names[:len(fitness)], flags[:len(fitness)]
+
+            # Format observations
+            if observations is not None:
+                train_m = statistics.mean(observations["time"]["train"])
+                valid_m = statistics.mean(observations["time"]["valid"])
+                train_val = (train_m, "s") if train_m < 12000 else (train_m/60, "m")
+                valid_val = (valid_m, "s") if valid_m < 12000 else (valid_m/60, "m")
+                time_msg = f"(train: {train_val[0]:.2f}{train_val[1]}, valid: {valid_val[0]:.2f}{valid_val[1]})"
+                other = [f"{k}={v}" for k,v in observations.items() if k != 'time' and k != 'resource_stats']
             else:
-                print(self.primary(("Fitness=%.3f " % fitness) + time_obs_message + f"\n{other_obs_message}"))
+                time_msg = other = ""
+
+            # Build fitness string
+            if len(fitness) > 1:
+                parts = [f"{n}{'↑' if f else '↓'}={v:.3f}" for n,f,v in zip(names, flags, fitness)]
+                print(self.primary(f"Fitness: [{', '.join(parts)}] {time_msg} {other}"))
+            else:
+                name, flag, val = names[0], flags[0], fitness[0]
+                print(self.primary(f"{name}{'↑' if flag else '↓'}={val:.3f} {time_msg} {other}"))
         except Exception as e:
             print(self.error(f"Error while logging pipeline: {e}"))
 
@@ -534,19 +556,36 @@ class RichLogger(Logger):
         self.console.rule(f"Evaluating pipeline at {timestamp}")
         self.console.print(repr(solution))
 
-    def eval_solution(self, solution, fitness, observations):
+    def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if not observations is None:
+        # Defensive: ensure fitness and objective_names are lists
+        if not isinstance(fitness, (list, tuple)):
+            fitness = [fitness]
+        if not objective_names or not isinstance(objective_names, (list, tuple)):
+            objective_names = [f"objective_{i}" for i in range(len(fitness))]
+        if len(objective_names) < len(fitness):
+            objective_names = list(objective_names) + [f"objective_{i}" for i in range(len(objective_names), len(fitness))]
+        elif len(objective_names) > len(fitness):
+            objective_names = objective_names[:len(fitness)]
+
+        if observations is not None:
             train_m_time = statistics.mean(observations["time"]["train"])
             valid_m_time = statistics.mean(observations["time"]["valid"])
             train_m_time_value = (train_m_time, "seconds") if train_m_time < 12000 else (train_m_time/60, "minutes")
             valid_m_time_value = (valid_m_time, "seconds") if valid_m_time < 12000 else (valid_m_time/60, "minutes")
-            
-        time_obs_message = f"(train mean time: {train_m_time_value[0]} {train_m_time_value[1]}, valid mean time: {valid_m_time_value[0]} {valid_m_time_value[1]})"\
-            if not observations is None else ""
-        other_obs_message = [f"other observations:\nMean {label}={value}" for label,value in observations if label != 'time' and label != 'resource_stats'] if not observations is None else ""
-            
-        self.console.print(Panel(f"📈 Fitness=[blue]{fitness} {time_obs_message}\n{other_obs_message}\n at {timestamp}"))
+        else:
+            train_m_time_value = valid_m_time_value = (None, "")
+
+        time_obs_message = f"(train mean time: {train_m_time_value[0]} {train_m_time_value[1]}, valid mean time: {valid_m_time_value[0]} {valid_m_time_value[1]})" if observations is not None else ""
+        other_obs_message = [f"other observations:\nMean {label}={value}" for label, value in observations.items() if label != 'time' and label != 'resource_stats'] if observations is not None else ""
+
+        # Format multi-objective with direction arrows
+        if len(fitness) > 1:
+            parts = [f"{n}{'↑' if f else '↓'}={v:.3f}" for n,f,v in zip(objective_names, objective_maximize, fitness)]
+            fitness_display = f"[{', '.join(parts)}]"
+        else:
+            fitness_display = f"{objective_names[0]}{'↑' if objective_maximize[0] else '↓'}={fitness[0]:.3f}"
+        self.console.print(Panel(f"📈 Fitness=[blue]{fitness_display} {time_obs_message}\n{other_obs_message}\n at {timestamp}"))
 
     def error(self, e: Exception, solution):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -641,15 +680,24 @@ class JsonLogger(Logger):
         }
         self.update_log(error_log)
 
-    def eval_solution(self, solution, fitness, observations):
+    def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
+        # Defensive: ensure fitness and objective_names are lists
+        if not isinstance(fitness, (list, tuple)):
+            fitness = [fitness]
+        if not objective_names or not isinstance(objective_names, (list, tuple)):
+            objective_names = [f"objective_{i}" for i in range(len(fitness))]
+        if len(objective_names) < len(fitness):
+            objective_names = list(objective_names) + [f"objective_{i}" for i in range(len(objective_names), len(fitness))]
+        elif len(objective_names) > len(fitness):
+            objective_names = objective_names[:len(fitness)]
+
         eval_log = {
-            "pipeline": repr(solution)
-            .replace("\n", "")
-            .replace(" ", "")
-            .replace(",", ", "),
+            "pipeline": repr(solution).replace("\n", "").replace(" ", "").replace(",", ", "),
             "multiline-pipeline": repr(solution),
             "fitness": fitness,
-            "observations": observations
+            "objective_names": objective_names,
+            "objective_maximize": objective_maximize,
+            "observations": observations,
         }
         self.update_log(eval_log)
 
@@ -723,6 +771,9 @@ class MemoryLogger(Logger):
     def __init__(self):
         self.generation_best_fn = [0]
         self.generation_mean_fn = []
+
+    def eval_solution(self, solution, fitness, observations, objective_names, objective_maximize):
+        pass
 
     def update_best(
         self,

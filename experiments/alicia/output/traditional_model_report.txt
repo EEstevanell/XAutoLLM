@@ -1,0 +1,14 @@
+=== IBERMAT TEXT CLASSIFICATION - TRADITIONAL MODEL ANALYSIS ===
+
+Analysis Date: 2025-04-05 16:05:40
+
+=== MODEL PERFORMANCE ===
+Accuracy: 0.5907
+Precision: 0.5886
+Recall: 0.5890
+F1: 0.5887
+Error rate: 0.4093
+
+Detailed results saved in traditional_model_results.json
+
+Analysis completed in 0.07 seconds.

@@ -1,61 +1,47 @@
 import pandas as pd
+import json
 from datasets import load_dataset
 
-def download_and_save_squad_as_csv(output_filename="squad_dataset.csv"):
+def download_and_save_drop_as_csv():
     """
-    Downloads the SQuAD dataset ('rajpurkar/squad') from Hugging Face
-    and saves its train and validation splits into a single CSV file.
-
-    Args:
-        output_filename (str): The name of the CSV file to save the dataset to.
-                               Defaults to "squad_dataset.csv".
+    Downloads the ucinlp/drop dataset from Hugging Face.
+    Saves the train split as 'train.csv' and the validation split as 'test.csv'.
+    The CSVs contain columns: 'passage', 'question', and 'answers_spans' (JSON string).
     """
     try:
-        # 1. Load the SQuAD dataset from Hugging Face
-        print("Loading SQuAD dataset (rajpurkar/squad)...")
-        squad_dataset = load_dataset("rajpurkar/squad")
+        # 1. Load the DROP dataset
+        dataset_name = "ucinlp/drop"
+        print(f"Loading {dataset_name} dataset...")
+        drop_dataset = load_dataset(dataset_name)
         print("Dataset loaded successfully.")
 
-        # 2. For each split, process and save to CSV
+        # 2. Process train split
+        print("Processing 'train' split...")
+        train = drop_dataset['train']
+        train_df = pd.DataFrame({
+            'passage': train['passage'],
+            'question': train['question'],
+            'answers_spans': [json.dumps(ans) for ans in train['answers_spans']]
+        })
+        train_csv = 'train.csv'
+        print(f"Saving train split to '{train_csv}'...")
+        train_df.to_csv(train_csv, index=False, encoding='utf-8')
+        print(f"Saved {len(train_df)} rows to '{train_csv}'.")
 
-        for split_name, split_data in squad_dataset.items():
-            print(f"Processing split: {split_name}")
-            df = split_data.to_pandas()
+        # 3. Process validation split as test
+        print("Processing 'validation' split...")
+        val = drop_dataset['validation']
+        test_df = pd.DataFrame({
+            'passage': val['passage'],
+            'question': val['question'],
+            'answers_spans': [json.dumps(ans) for ans in val['answers_spans']]
+        })
+        test_csv = 'test.csv'
+        print(f"Saving validation split as '{test_csv}'...")
+        test_df.to_csv(test_csv, index=False, encoding='utf-8')
+        print(f"Saved {len(test_df)} rows to '{test_csv}'.")
 
-            # Extraction logic that works for both lists and numpy arrays
-            import numpy as np
-            def get_first_answer_text(answers):
-                if isinstance(answers, dict) and 'text' in answers:
-                    texts = answers['text']
-                    if isinstance(texts, (list, np.ndarray)) and len(texts) > 0:
-                        return texts[0]
-                return None
-
-            def get_first_answer_start(answers):
-                if isinstance(answers, dict) and 'answer_start' in answers:
-                    starts = answers['answer_start']
-                    if isinstance(starts, (list, np.ndarray)) and len(starts) > 0:
-                        return starts[0]
-                return None
-
-            print("Processing the 'answers' column for CSV compatibility...")
-            df['answer_text'] = df['answers'].apply(get_first_answer_text)
-            df['answer_start'] = df['answers'].apply(get_first_answer_start)
-            df = df.drop(columns=['answers'])
-
-            # Save to appropriate CSV
-            if split_name == 'train':
-                out_csv = 'train.csv'
-            elif split_name == 'validation':
-                out_csv = 'test.csv'
-            else:
-                out_csv = f"{split_name}.csv"
-
-            print(f"Saving {split_name} split to '{out_csv}'...")
-            df.to_csv(out_csv, index=False, encoding='utf-8')
-            print(f"Saved {len(df)} rows to '{out_csv}'.")
-
-        print("All splits processed and saved.")
+        print("All specified splits processed and saved.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -63,6 +49,4 @@ def download_and_save_squad_as_csv(output_filename="squad_dataset.csv"):
         print("You can install them using: pip install datasets pandas")
 
 if __name__ == "__main__":
-    # To run the script, make sure you have the required libraries installed:
-    # pip install datasets pandas
-    download_and_save_squad_as_csv()
+    download_and_save_drop_as_csv()

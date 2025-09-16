@@ -1,0 +1,107 @@
+{
+    "algorithms": [
+        {
+            "PartialFineTuneGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Mistralai_Mistral_7B_Instruct_V01": {}
+                    }
+                },
+                "num_trainable_layers": {
+                    "value": 2
+                },
+                "batch_size": {
+                    "value": 16
+                },
+                "max_length": {
+                    "value": 256
+                },
+                "learning_rate": {
+                    "value": 0.0001
+                },
+                "epochs": {
+                    "value": 10
+                },
+                "warmup_steps": {
+                    "value": 1500
+                },
+                "weight_decay": {
+                    "value": 0.01
+                },
+                "optimizer": {
+                    "value": "adagrad"
+                },
+                "dropout_rate": {
+                    "value": 0.5
+                },
+                "gradient_accumulation_steps": {
+                    "value": 16
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "early_stopping_delta": {
+                    "value": 0.001
+                },
+                "use_mixed_precision": {
+                    "value": false
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 0.5
+                },
+                "class_weighted_loss": {
+                    "value": false
+                },
+                "num_workers": {
+                    "value": "default"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        68221.0,
+        2.0,
+        0.9905375067637479,
+        0.4427962064466953,
+        0.5572037935533047,
+        0.7946755057480336,
+        54.17455035839404,
+        43.86607761016831,
+        0.8097174285706187,
+        0.6304364202681407
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-31 15:19:51",
+    "alias": "sst2_warmstart_id:(f-pos cos k=0.5)-rd:2024 (rn:2024)",
+    "cross_val_steps": null,
+    "error": "You are trying to access a gated repo.\nMake sure to have access to it at https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1.\n401 Client Error. (Request ID: Root=1-67740b1f-13eb88f560e77414134cb0fb;86e8be1d-4805-4bfd-8826-1540f16f0ead)\n\nCannot access gated repo for url https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1/resolve/main/config.json.\nAccess to model mistralai/Mistral-7B-Instruct-v0.1 is restricted. You must have access to it and be authenticated to access it. Please log in.",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

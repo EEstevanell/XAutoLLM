@@ -1,0 +1,119 @@
+{
+    "algorithms": [
+        {
+            "LoraGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Gpt2_Medium": {}
+                    }
+                },
+                "lora_r": {
+                    "value": 17
+                },
+                "lora_alpha": {
+                    "value": 64
+                },
+                "lora_dropout": {
+                    "value": 0.0
+                },
+                "lora_bias": {
+                    "value": "none"
+                },
+                "batch_size": {
+                    "value": 64
+                },
+                "max_length": {
+                    "value": 2048
+                },
+                "learning_rate": {
+                    "value": 5e-06
+                },
+                "epochs": {
+                    "value": 10
+                },
+                "warmup_steps": {
+                    "value": 2000
+                },
+                "weight_decay": {
+                    "value": 0.005
+                },
+                "optimizer": {
+                    "value": "adamw"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 8
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "model_save": {
+                    "value": "classifier"
+                },
+                "fan_in_fan_out": {
+                    "value": false
+                },
+                "early_stopping_delta": {
+                    "value": 0.005
+                },
+                "use_mixed_precision": {
+                    "value": true
+                },
+                "use_gradient_clipping": {
+                    "value": false
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 0.5
+                },
+                "class_weighted_loss": {
+                    "value": false
+                },
+                "num_workers": {
+                    "value": "3/4"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        68221.0,
+        2.0,
+        0.9905375067637479,
+        0.4427962064466953,
+        0.5572037935533047,
+        0.7946755057480336,
+        54.17455035839404,
+        43.86607761016831,
+        0.8097174285706187,
+        0.6304364202681407
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-30 00:02:40",
+    "alias": "sst2_warmstart_id:(f-pos cos k=0.5)-rd:123 (rn:123)",
+    "cross_val_steps": null,
+    "error": "CUDA out of memory. Tried to allocate 1024.00 MiB. GPU 1 has a total capacity of 23.64 GiB of which 603.56 MiB is free. Process 2279514 has 162.00 MiB memory in use. Process 2308750 has 22.89 GiB memory in use. Of the allocated memory 22.03 GiB is allocated by PyTorch, and 672.39 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

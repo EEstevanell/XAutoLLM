@@ -1,0 +1,122 @@
+{
+    "algorithms": [
+        {
+            "LoraGenLLMClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Prompt],GeneratedText]",
+                    "value": {
+                        "TEXT_GEN_Google_T5_T5_11B": {}
+                    }
+                },
+                "lora_r": {
+                    "value": 1
+                },
+                "lora_alpha": {
+                    "value": 32
+                },
+                "lora_dropout": {
+                    "value": 0.2
+                },
+                "lora_bias": {
+                    "value": "none"
+                },
+                "batch_size": {
+                    "value": 4
+                },
+                "max_length": {
+                    "value": 128
+                },
+                "learning_rate": {
+                    "value": 5e-06
+                },
+                "epochs": {
+                    "value": 9
+                },
+                "warmup_steps": {
+                    "value": 500
+                },
+                "weight_decay": {
+                    "value": 0.1
+                },
+                "optimizer": {
+                    "value": "adagrad"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 4
+                },
+                "lr_scheduler": {
+                    "value": "constant"
+                },
+                "model_save": {
+                    "value": "classifier"
+                },
+                "init_lora_weights": {
+                    "value": "gaussian"
+                },
+                "fan_in_fan_out": {
+                    "value": false
+                },
+                "early_stopping_delta": {
+                    "value": 0.001
+                },
+                "use_mixed_precision": {
+                    "value": false
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 5.0
+                },
+                "class_weighted_loss": {
+                    "value": false
+                },
+                "num_workers": {
+                    "value": "half"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11524.0,
+        6.0,
+        2.53531547347489,
+        0.08287053106560222,
+        0.20496355432141616,
+        0.40431837425910244,
+        106.8957827143353,
+        58.412516010214105,
+        0.5464435969968409,
+        0.22448726349722822
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-24 00:10:52",
+    "alias": "liar_warmstart_id:(f-pos cos k=0.5)[F1+Time]-rd:42 (rn:42)",
+    "cross_val_steps": null,
+    "error": null,
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": -Infinity
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": Infinity
+        }
+    ]
+}

@@ -1,81 +1,134 @@
+# --- Metric class for structured, future-proof metrics ---
 from math import inf
-import os
-import json
-import re
-import uuid
 from pathlib import Path
-import numpy as np
 from typing import List, Dict, Any, Optional, Union
 from datetime import date, datetime
+from autogoal.meta_learning.utils import Metric, sanitize_for_json
+import numpy as np
+import json
+import uuid
+import re # Added import
+import logging
 
 # Path to store experiences
-DATA_PATH = Path.home() / ".autogoal" / "experience_store"
+DATA_PATH = Path.home() / ".autogoal" / "experience_store" # Changed path
 
 class Experience:
     def __init__(
         self,
         algorithms: List[Dict[str, Any]] = None,
-        dataset_features: np.ndarray = None,
-        system_features: np.ndarray = None,
-        dataset_feature_extractor_name: str = None,
+        task_features: Optional[Dict[str, Optional[np.ndarray]]] = None,  # Changed type hint
+        system_features: Optional[np.ndarray] = None, # Changed type hint
+        dataset_feature_extractor_name: str = None, 
         system_feature_extractor_name: str = None,
         timestamp: str = None,
         alias: str = None,
         cross_val_steps: Optional[int] = None,
-        accuracy: Optional[float] = None,
-        f1: Optional[float] = None,
-        evaluation_time: Optional[float] = None,
+        metrics: Optional[list] = None,
         error: Optional[str] = None,
     ):
         self.algorithms = algorithms
-        self.dataset_features = dataset_features
+        self.task_features = task_features if task_features is not None else {} # Ensure it\'s a dict
         self.system_features = system_features
         self.dataset_feature_extractor_name = dataset_feature_extractor_name
         self.system_feature_extractor_name = system_feature_extractor_name
         self.timestamp = timestamp
         self.alias = alias
-        self.accuracy = accuracy
         self.cross_val_steps = cross_val_steps
-        self.f1 = f1
-        self.evaluation_time = evaluation_time
+        # Accepts list of Metric, dict, or dicts (for backward compatibility)
+        self.metrics = []
+        if metrics is not None:
+            for m in metrics:
+                if isinstance(m, Metric):
+                    self.metrics.append(m)
+                elif isinstance(m, dict):
+                    self.metrics.append(Metric.from_dict(m))
+                else:
+                    raise ValueError(f"Invalid metric type: {type(m)}")
         self.error = error
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'algorithms': self.algorithms,
-            'dataset_features': self.dataset_features.tolist(),
-            'system_features': self.system_features.tolist(),
-            'dataset_feature_extractor_name': self.dataset_feature_extractor_name,
-            'system_feature_extractor_name': self.system_feature_extractor_name,
-            'timestamp': self.timestamp,
-            'alias': self.alias,
-            'accuracy': self.accuracy,
-            'cross_val_steps': self.cross_val_steps,
-            'f1': self.f1,
-            'evaluation_time': self.evaluation_time,
-            'error': self.error,
+            'algorithms': sanitize_for_json(self.algorithms),
+            'task_features': sanitize_for_json(self.task_features), # Changed
+            'system_features': sanitize_for_json(self.system_features),
+            'dataset_feature_extractor_name': sanitize_for_json(self.dataset_feature_extractor_name),
+            'system_feature_extractor_name': sanitize_for_json(self.system_feature_extractor_name),
+            'timestamp': sanitize_for_json(self.timestamp),
+            'alias': sanitize_for_json(self.alias),
+            'cross_val_steps': sanitize_for_json(self.cross_val_steps),
+            'metrics': [m.to_dict() for m in self.metrics],
+            'error': sanitize_for_json(self.error),
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Experience':
+        task_features_raw = data.get('task_features')
+
+        # Backward compatibility for old 'dataset_features'
+        if task_features_raw is None and 'dataset_features' in data:
+            old_dataset_features = data.get('dataset_features')
+            if old_dataset_features is not None:
+                # Assuming old dataset_features were a flat list (potentially features)
+                # Convert to np.ndarray if it's a list
+                processed_old_features = np.array(old_dataset_features) if isinstance(old_dataset_features, list) else old_dataset_features
+                task_features_raw = {"meta": processed_old_features, "semantic": None}
+            else:
+                task_features_raw = {} 
+        elif task_features_raw is None: 
+            task_features_raw = {}
+
+        # Convert lists in task_features_raw to np.ndarray
+        processed_task_features: Dict[str, Optional[np.ndarray]] = {}
+        if isinstance(task_features_raw, dict):
+            for key, value in task_features_raw.items():
+                if isinstance(value, list):
+                    processed_task_features[key] = np.array(value)
+                elif isinstance(value, np.ndarray): # Already an ndarray (e.g. if called internally not from JSON)
+                    processed_task_features[key] = value
+                elif value is None:
+                    processed_task_features[key] = None
+                else:
+                    # Potentially handle other types or raise error if unexpected type
+                    processed_task_features[key] = value 
+        else:
+            # Handle cases where task_features_raw might not be a dict as expected
+            # For safety, initialize to empty if structure is unexpected after migration logic
+            processed_task_features = {}
+
+
+        system_features_raw = data.get('system_features')
+        processed_system_features: Optional[np.ndarray] = None
+        if isinstance(system_features_raw, list):
+            processed_system_features = np.array(system_features_raw)
+        elif isinstance(system_features_raw, np.ndarray):
+            processed_system_features = system_features_raw
+        elif system_features_raw is None:
+            processed_system_features = None
+        # else: handle other types or raise error
+
+        metrics = data.get('metrics', [])
+        if isinstance(metrics, dict): # Backward compatibility
+            metrics = [Metric(name=k, maximize=True, value=v) for k, v in metrics.items()]
+        elif isinstance(metrics, list):
+            metrics = [Metric.from_dict(m) if not isinstance(m, Metric) else m for m in metrics]
         return cls(
             algorithms=data['algorithms'],
-            dataset_features=np.array(data['dataset_features']),
-            system_features=np.array(data['system_features']),
+            task_features=processed_task_features, # Pass processed features
+            system_features=processed_system_features, # Pass processed features
             dataset_feature_extractor_name=data.get('dataset_feature_extractor_name', 'Unknown'),
             system_feature_extractor_name=data.get('system_feature_extractor_name', 'Unknown'),
             timestamp=data['timestamp'],
             alias=data.get('alias', 'Unknown'),
-            accuracy=data.get('accuracy'),
             cross_val_steps=data.get('cross_val_steps'),
-            f1=data.get('f1'),
-            evaluation_time=data.get('evaluation_time'),
+            metrics=metrics,
             error=data.get('error'),
         )
 
 
 # Updated ExperienceStore class
 class ExperienceStore:
+    logger = logging.getLogger(__name__)
     DATA_PATH = DATA_PATH
 
     @staticmethod
@@ -125,14 +178,20 @@ class ExperienceStore:
         Args:
             from_date (Optional[Union[str, date]]): The start date in "YYYY-MM-DD" format or a date object.
             to_date (Optional[Union[str, date]]): The end date in "YYYY-MM-DD" format or a date object.
-            include (Optional[str]): Regex of aliases to include.
-            exclude (Optional[str]): Regex of aliases to exclude.
+            include (Optional[str]): Regex pattern for aliases to include.
+            exclude (Optional[str]): Regex pattern for aliases to exclude.
 
         Returns:
             A list of Experience instances.
         """
         experiences = []
-        if not ExperienceStore.DATA_PATH.exists():
+        
+        # Use the class attribute DATA_PATH
+        current_data_path = ExperienceStore.DATA_PATH
+        ExperienceStore.logger.info(f"Loading experiences from: {current_data_path}")
+
+        if not current_data_path.exists():
+            ExperienceStore.logger.warning(f"DATA_PATH does not exist: {current_data_path}")
             # No experiences saved yet
             return experiences
 
@@ -151,26 +210,27 @@ class ExperienceStore:
         else:
             to_date_obj = None
             
-        if include:
-            include = f".*({include}).*"
-        else:
-            include = r".*"
+        # Compile regex patterns if provided
+        include_pattern = re.compile(include) if include else None
+        exclude_pattern = re.compile(exclude) if exclude else None
 
-        if exclude:
-            exclude = f".*({exclude}).*"
+        ExperienceStore.logger.debug(f"Filters: from_date={from_date_obj}, to_date={to_date_obj}, include_pattern={'set' if include_pattern else 'None'}, exclude_pattern={'set' if exclude_pattern else 'None'}")
 
         # Traverse all alias directories
-        for alias_dir in ExperienceStore.DATA_PATH.iterdir():
+        for alias_dir in current_data_path.iterdir():
             if alias_dir.is_dir():
                 alias = alias_dir.name
+                
                 # Apply alias filtering
-                if not re.match(include, alias):
+                if include_pattern and not include_pattern.search(alias):
+                    ExperienceStore.logger.debug(f"Skipping alias '{alias}': No match for include pattern.")
                     continue
                 
-                if exclude is not None and re.match(exclude, alias):
+                if exclude_pattern and exclude_pattern.search(alias):
+                    ExperienceStore.logger.debug(f"Skipping alias '{alias}': Match for exclude pattern.")
                     continue
                 
-                print("loading experiences for alias:", alias)    
+                ExperienceStore.logger.debug(f"Processing alias: {alias}")    
                 
                 alias_exp_count = 0
                 alias_exp_pos_count = 0
@@ -194,14 +254,23 @@ class ExperienceStore:
                         # Iterate over all JSON files in the date directory
                         for file_path in date_dir.glob('*.json'):
                             with open(file_path, 'r') as f:
-                                data = json.load(f)
-                                experience = Experience.from_dict(data)
-                                experiences.append(experience)
-                                alias_exp_count += 1
+                                try:
+                                    data = json.load(f)
+                                    experience = Experience.from_dict(data)
+                                    experiences.append(experience)
+                                    alias_exp_count += 1
+                                    
+                                    # Count positive/negative by checking for at least one metric with a value
+                                    if experience.metrics and any(
+                                        (m.value is not None and m.value != -inf)
+                                        for m in experience.metrics
+                                    ):
+                                        alias_exp_pos_count += 1
+                                    else:
+                                        alias_exp_neg_count += 1
+                                except Exception as e:
+                                    ExperienceStore.logger.error(f"Error loading {file_path}: {e}")
+                                    continue
                                 
-                                if (experience.f1 is not None and experience.f1 != -inf):
-                                    alias_exp_pos_count += 1
-                                else:
-                                    alias_exp_neg_count += 1
-                print(f"loaded {alias_exp_count} experiences for alias {alias} ({alias_exp_pos_count} positive, {alias_exp_neg_count} negative)")
+                ExperienceStore.logger.info(f"loaded {alias_exp_count} experiences for alias {alias} ({alias_exp_pos_count} positive, {alias_exp_neg_count} negative)")
         return experiences

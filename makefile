@@ -39,6 +39,10 @@ container:
 container-gpu:
 	docker run -it --name xautollm-gpu --hostname xautollm-gpu -p 8500:8501 -p 8000:8000 -v "$(pwd):/home/coder/autogoal" -v "$HOME/.ssh:/home/coder/.ssh" -v "$HOME/.gitconfig:/home/coder/.gitconfig" --user 1000:1000 --gpus all autogoal/xautollm:latest
 
+.PHONY: container-gpu-win
+container-gpu-win:
+	docker run -it --name xautollm-gpu --hostname xautollm-gpu -p 8500:8501 -p 8000:8000 -v "$(shell cd):/home/coder/autogoal" -v "$(USERPROFILE)/.ssh:/home/coder/.ssh" -v "$(USERPROFILE)/.gitconfig:/home/coder/.gitconfig" --user 1000:1000 --gpus all autogoal/xautollm:latest
+
 # ‎‎
 # ---------------------------------------------------------------------------
 # The following commands must be run INSIDE the development environment.

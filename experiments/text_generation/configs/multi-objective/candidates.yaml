@@ -1,0 +1,19 @@
+drop:
+  baseline:
+    zeroshot: "drop"
+  low:
+    max: "drop_warmstart (a-pos no-neg cos k=0.5)[logarithmic_front]"
+  moderate:
+    max: "drop_warmstart (f-pos f-neg)[logarithmic_front]"
+  high:
+    max: "drop_warmstart (a-pos f-neg)[linear_front]"
+
+squad:
+  baseline:
+    zeroshot: "squad"
+  low:
+    max: "squad_warmstart (a-pos no-neg)[weighted_sum]"
+  moderate:
+    max: "squad_warmstart (a-pos f-neg cos k=0.5)[weighted_sum]"
+  high:
+    max: "squad_warmstart (a-pos f-neg)[logarithmic_front]"

@@ -1,0 +1,38 @@
+{
+  "execution_time": 75.92218708992004,
+  "total_experiments": 4,
+  "experiments": [
+    {
+      "experiment_id": "liar-knn-k25",
+      "dataset": "liar",
+      "device": 0,
+      "cpu_cores": 12,
+      "log_file": "/home/coder/autogoal/experiments/output/logs/liar_knn_k25.log",
+      "status": "completed"
+    },
+    {
+      "experiment_id": "sst2-knn-k25",
+      "dataset": "sst2",
+      "device": 0,
+      "cpu_cores": 12,
+      "log_file": "/home/coder/autogoal/experiments/output/logs/sst2_knn_k25.log",
+      "status": "completed"
+    },
+    {
+      "experiment_id": "ag_news-knn-k25",
+      "dataset": "ag_news",
+      "device": 0,
+      "cpu_cores": 12,
+      "log_file": "/home/coder/autogoal/experiments/output/logs/ag_news_knn_k25.log",
+      "status": "completed"
+    },
+    {
+      "experiment_id": "meld-knn-k25",
+      "dataset": "meld",
+      "device": 0,
+      "cpu_cores": 12,
+      "log_file": "/home/coder/autogoal/experiments/output/logs/meld_knn_k25.log",
+      "status": "completed"
+    }
+  ]
+}

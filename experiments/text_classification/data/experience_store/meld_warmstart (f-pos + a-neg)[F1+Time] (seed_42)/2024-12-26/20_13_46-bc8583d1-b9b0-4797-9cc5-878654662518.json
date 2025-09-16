@@ -1,0 +1,104 @@
+{
+    "algorithms": [
+        {
+            "FineTuneLLMEmbeddingClassifier": {
+                "inner_model": {
+                    "annotation": "Algorithm[[Word],Tensor[1, Continuous, None]]",
+                    "value": {
+                        "WORD_EMB_Microsoft_Deberta_V3_Base": {}
+                    }
+                },
+                "batch_size": {
+                    "value": 128
+                },
+                "max_length": {
+                    "value": 4096
+                },
+                "learning_rate": {
+                    "value": 2e-05
+                },
+                "epochs": {
+                    "value": 1
+                },
+                "warmup_steps": {
+                    "value": 500
+                },
+                "weight_decay": {
+                    "value": 0.001
+                },
+                "dropout_rate": {
+                    "value": 0.5
+                },
+                "optimizer": {
+                    "value": "adagrad"
+                },
+                "gradient_accumulation_steps": {
+                    "value": 4
+                },
+                "lr_scheduler": {
+                    "value": "polynomial"
+                },
+                "early_stopping_delta": {
+                    "value": 0.01
+                },
+                "use_mixed_precision": {
+                    "value": true
+                },
+                "use_gradient_clipping": {
+                    "value": true
+                },
+                "gradient_clipping_max_norm": {
+                    "value": 5.0
+                },
+                "class_weighted_loss": {
+                    "value": true
+                },
+                "num_workers": {
+                    "value": "3/4"
+                }
+            }
+        }
+    ],
+    "dataset_features": [
+        11098.0,
+        7.0,
+        2.2308658494209044,
+        0.02640115336096594,
+        0.46675076590376646,
+        0.056563706563706566,
+        40.49594521535412,
+        31.847622649718772,
+        0.7864397899680011,
+        0.4905389571635628
+    ],
+    "system_features": [
+        8.0,
+        16.0,
+        5.0,
+        125.70533752441406,
+        0.0
+    ],
+    "dataset_feature_extractor_name": "TextClassificationFeatureExtractor",
+    "system_feature_extractor_name": "SystemFeatureExtractor",
+    "timestamp": "2024-12-26 20:13:46",
+    "alias": "meld_warmstart_id:(f-pos + a-neg)[F1+Time]-rd:42 (rn:42)",
+    "cross_val_steps": null,
+    "error": "Caught RuntimeError in DataLoader worker process 0.\nOriginal Traceback (most recent call last):\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/worker.py\", line 351, in _worker_loop\n    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py\", line 55, in fetch\n    return self.collate_fn(data)\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/collate.py\", line 398, in default_collate\n    return collate(batch, collate_fn_map=default_collate_fn_map)\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/collate.py\", line 171, in collate\n    {\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/collate.py\", line 172, in <dictcomp>\n    key: collate(\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/collate.py\", line 155, in collate\n    return collate_fn_map[elem_type](batch, collate_fn_map=collate_fn_map)\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/utils/data/_utils/collate.py\", line 270, in collate_tensor_fn\n    storage = elem._typed_storage()._new_shared(numel, device=elem.device)\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/storage.py\", line 1180, in _new_shared\n    untyped_storage = torch.UntypedStorage._new_shared(\n  File \"/home/coder/.local/lib/python3.9/site-packages/torch/storage.py\", line 402, in _new_shared\n    return cls._new_using_fd_cpu(size)\nRuntimeError: unable to write to file </torch_758622_2014143754_0>: No space left on device (28)\n",
+    "metrics": [
+        {
+            "name": "accuracy",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "f1",
+            "maximize": true,
+            "value": null
+        },
+        {
+            "name": "evaluation_time",
+            "maximize": false,
+            "value": null
+        }
+    ]
+}

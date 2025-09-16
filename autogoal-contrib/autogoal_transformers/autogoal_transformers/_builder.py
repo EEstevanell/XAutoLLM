@@ -868,7 +868,6 @@ def get_task_alias(task):
             return alias
     return None
 
-
 TASK_TO_ALGORITHM_MARK = {
     TASK_ALIASES.TextClassification: "TEXT_CLASS_",
     TASK_ALIASES.WordEmbeddings: "WORD_EMB_",
@@ -882,7 +881,6 @@ TASK_TO_WRAPPER_NAME = {
     TASK_ALIASES.TextClassification: PretrainedTextClassifier.__name__,
     TASK_ALIASES.TokenClassification: PretrainedTokenClassifier.__name__,
 }
-
 
 def build_transformers_wrappers(
     max_amount=1000, min_likes=100, min_downloads=1000, download_mode=DOWNLOAD_MODE.HUB
@@ -924,7 +922,6 @@ def build_transformers_wrappers(
     black.reformat_one(
         path, True, black.WriteBack.YES, black.FileMode(), black.Report()
     )
-
 
 def _write_class(item, fp, target_task):
     class_name = TASK_TO_ALGORITHM_MARK[target_task] + to_camel_case(

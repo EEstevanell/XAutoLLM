@@ -1,8 +1,5 @@
-from typing import Optional, Dict, List, Type
-from autogoal.meta_learning.sampling import ExperienceReplayModelSampler
-from autogoal.sampling import ModelSampler, ReplaySampler, best_indices, merge_updates, update_model
-from autogoal.search._base import SearchAlgorithm
-from autogoal.meta_learning import ExperienceStore, Experience
+from typing import Optional
+from autogoal.sampling import ModelSampler
 from autogoal.meta_learning import WarmStart
 from autogoal.search._nspge import NSPESearch
 
@@ -19,7 +16,7 @@ class NSPEWarmStartSearch(NSPESearch):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.warm_start = warm_start if warm_start is not None else WarmStart(None, 0.2)
+        self.warm_start = warm_start if warm_start is not None else WarmStart()
         self.warm_started = False
         
         
