@@ -1,180 +1,141 @@
-# XAutoLLM Experiments
+# XAutoLM Experiments
 
-This directory contains all the resources, code, and data needed to reproduce the experimental results presented in our paper for ACL 2025.
+This directory aggregates the assets required to reproduce the experiments reported in the paper "XAutoLM: Efficient Fine-Tuning of Language Models via Meta-Learning and AutoML" (EMNLP 2025). The pipeline is split into two suites: text classification and text generation, sharing a common design for configuration management, execution, and analysis.
 
-## Repository Access
-
-For anonymous peer review, the code is available at the following repository:
-```
-https://anonymous.4open.science/r/XAutoLLM-A010
-```
-
-## Directory Structure
+## Overview
 
 ```
 experiments/
-├── configs/                      # Configuration files for experiments
-│   ├── multi-objective/          # Configurations for multi-objective optimization experiments
-│   │   └── candidates.yaml       # Candidate selection methods per dataset and bias level
-│   └── single-objective/         # Configurations for single-objective optimization experiments
-│       └── candidates.yaml       # Candidate selection methods per dataset and bias level
-├── data/                         # Experimental data
-│   ├── experience_store/         # Pre-collected experience data for analysis (not where new experience is generated)
-│   ├── initial_bias_configurations/ # Initial bias configurations for meta-learning parameter combinations
-│   └── rename_script.py          # Utility script for renaming data files
-├── makefile                      # Automation scripts for running experiments
-├── Readme.md                     # This file
-├── output/                       # Output directory for experiment results
-│   ├── logs/                     # Log files for each experiment run
-│   └── experiment_summary.json   # Summary of all executed experiments
-└── src/                          # Source code for experiments
-    ├── __init__.py
-    ├── analysis/                 # Code for analyzing experimental results
-    │   ├── multi_objective/      # Multi-objective analysis scripts
-    │   │   └── main.py           # Main entry point for multi-objective analysis
-    │   └── single_objective/     # Single-objective analysis scripts
-    │       └── main.py           # Main entry point for single-objective analysis
-    ├── data_loading/             # Code for loading and preprocessing datasets
-    ├── execute_experiments.py    # Main experiment execution script
-    ├── experiment_config_generator.py # Generates experiment configurations
-    ├── general_experiment.py     # Common experiment functionality
-    ├── metrics/                  # Implementation of evaluation metrics
-    └── visualisations/           # Code for generating figures and visualizations
+|- makefile                    # Container-oriented shortcuts (legacy)
+|- requirements.txt            # Python dependencies for both suites
+|- setup_pythonpath.sh         # Helper for container execution paths
+|- text_classification/
+|  |- configs/                 # YAML experiment definitions (single & multi objective)
+|  |- data/                    # Datasets and warm-start experience stores
+|  |- output/                  # Generated metrics, logs, tables, and plots
+|  |- src/                     # Execution, analysis, and visualisation code
+|  |- run_experiment.sh        # Docker / SLURM entrypoint
+|  |- p4.slurm                 # SLURM script for multi-GPU clusters
+|- text_generation/
+   |- configs/
+   |- data/
+   |- output/
+   |- src/
+   |- run_experiment.sh
+   |- p3.slurm
 ```
 
-## Requirements
+Both `data/` directories contain the corpora, metadata, and pre-collected experience referenced in the paper:
 
-To run these experiments, you need to have AutoGOAL installed with all required dependencies. If you haven't already, please follow the installation instructions in the main repository README or use the following commands:
+- `experiments/text_classification/data`
+- `experiments/text_generation/data`
+
+Refer to the `README` files within each dataset folder for provenance and licence details.
+
+## Environment setup
+
+Follow the installation steps from the repository root README or set up a virtual environment from here:
 
 ```bash
-# Clone the repository if you haven't already
-git clone https://anonymous.4open.science/r/XAutoLLM-A010.git
-cd XAutoLLM-A010
-
-# Install main package and dependencies
-pip install -e .
-pip install -e .[contrib]  # For optional dependencies
-
-# Install XAutoLLM specific dependencies
-pip install -r experiments/requirements.txt
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-## Hardware Requirements
+If you executed `pip install -e .` from the repository root, the core XAutoLM packages will already be available. Ensure at least one CUDA-capable GPU (16 GB VRAM recommended) is visible before launching experiments.
 
-The experiments require CUDA-capable GPUs for the transformer-based models. The execution framework will automatically detect available CUDA devices and distribute experiments accordingly.
-
-## Experiment Configuration
-
-The experiment configurations are organized in the `configs/` directory, with separate directories for multi-objective and single-objective optimization approaches:
-
-### Candidate Configurations
-
-Both `multi-objective` and `single-objective` directories contain a `candidates.yaml` file that specifies:
-
-- Different datasets used in experiments (e.g., "liar", "sst2", "ag_news", "meld")
-- Different bias levels (baseline, low, moderate, high)
-- Candidate selection methods (liar, median, max)
-- Specific configurations for each combination
-
-Each entry in the YAML file points to a corresponding directory in `data/experience_store/` that contains the experience (evaluations) generated by that specific configuration during the search process.
-
-Example format:
-```yaml
-dataset_name:
-  baseline: "baseline_config"
-  bias_level:
-    selection_method: "config_name (parameters)[objectives][utility_function] (seed)"
-```
-
-## Data Organization
-
-The `data/` directory contains:
-
-1. **experience_store**: Contains pre-collected experience data for analysis purposes. Note that when executing experiments, new experience will be generated in the default location (`/home/coder/.autogoal/data/experience_store`).
-
-2. **initial_bias_configurations**: Stores different bias levels for meta-learning parameter combinations used in the multi-objective experiments.
-
-## Experience Store Information
-
-**IMPORTANT:** There are two different experience store locations used in this framework:
-
-1. **Default Experience Store** (`/home/coder/.autogoal/data/experience_store`):
-   - This is where new experiences are generated when running experiments with `run-multi-objective` and `run-single-objective` commands.
-   - The execute_experiments.py script writes to this location.
-
-2. **Analysis Experience Store** (`/home/coder/autogoal/experiments/data/experience_store`):
-   - This location contains pre-collected experience data used by the analysis scripts.
-   - The multi-objective and single-objective result analysis scripts read from this location.
-
-After running experiments, you can use `make copy-experiences` to copy the newly generated experiences from the default location to the analysis location if you want to include them in your analysis.
-
-## Running Experiments
-
-The experiments are orchestrated through the makefile, which provides several targets. **Note that multi-objective experiments always run first, followed by single-objective experiments.**
+Add the `experiments` folder to `PYTHONPATH` to resolve intra-package imports:
 
 ```bash
-# Run all experiments (multi-objective first, then single-objective) and analyze results
-make all
-
-# Run only multi-objective experiments
-make run-multi-objective
-
-# Run only single-objective experiments
-make run-single-objective
-
-# Run all experiments in the correct order
-make run-experiments
-
-# Analyze multi-objective experiment results
-make analyze-multi-objective
-
-# Analyze single-objective experiment results
-make analyze-single-objective
-
-# Analyze all experiment results
-make analyze-results
-
-# Copy experiences from default location to analysis location
-make copy-experiences
-
-# Clean generated results
-make clean
+export PYTHONPATH="$(pwd):${PYTHONPATH}"                # Linux/macOS
+set PYTHONPATH=%cd%;%PYTHONPATH%                        # Windows PowerShell
 ```
 
-### Experiment Execution Details
+## Running the suites
 
-Experiments are executed using the `execute_experiments.py` script, which:
-
-1. Detects available CUDA devices and distributes experiments across them
-2. Allocates CPU cores appropriately for each experiment
-3. Manages experiment logs in the `output/logs/` directory
-4. Ensures that baseline experiments are executed first (for generating the initial experience for the warmstart candidates)
-5. Tracks experiment execution status and generates a summary
-
-## Result Analysis
-
-After running experiments, the results are processed using the analysis modules:
-
-1. `analyze-multi-objective` - Runs the multi-objective analysis using `src/analysis/multi_objective/main.py`
-2. `analyze-single-objective` - Runs the single-objective analysis using `src/analysis/single_objective/main.py`
-
-Both analysis modules use the pre-collected experience data in `experiments/data/experience_store` for their analysis.
-
-## Reproducing Paper Results
-
-To reproduce all the results presented in our ACL 2025 paper:
+### Text classification
 
 ```bash
-# Run all experiments and analyze results
-make paper
+cd text_classification
+python src/execute_experiments.py --experiment_type multi
+python src/execute_experiments.py --experiment_type single
 ```
 
-This command will:
-1. Run multi-objective experiments first 
-2. Run single-objective experiments
-3. Analyze the results using the appropriate analysis modules
+- Logs and intermediate artefacts are stored in `text_classification/output`.
+- Warm-start experience used by the analysis scripts resides in `text_classification/data/experience_store`.
+- For containerised or SLURM-based execution reuse `run_experiment.sh` together with `p4.slurm`.
 
-## License
+### Text generation
 
-This experimental setup is licensed under the same license as the main repository.
+```bash
+cd text_generation
+python src/execute_experiments.py --experiment_type multi
+python src/execute_experiments.py --experiment_type single
+```
 
+- Outputs mirror the classification suite and live under `text_generation/output`.
+- Prebuilt experience snapshots are bundled in `text_generation/data/experience_store`.
+- Use `run_experiment.sh` (optionally scheduled via `p3.slurm`) for automated GPU orchestration.
+
+### Analysis utilities
+
+Each suite exposes mirrored analysis entry points:
+
+```bash
+# From text_classification
+python src/analysis/multi_objective/main.py
+python src/analysis/single_objective/main.py
+
+# From text_generation
+python src/analysis/multi_objective/main.py
+python src/analysis/single_objective/main.py
+```
+
+These scripts expect the relevant `data/experience_store` directory to hold the experience you wish to analyse. To include fresh executions, copy data from the runtime store created at `~/.autogoal/data/experience_store/` into the respective `data/experience_store/` folder.
+
+## Data synchronisation
+
+Synchronise runtime experiences into the repository snapshots to keep analyses reproducible:
+
+```bash
+rsync -av ~/.autogoal/data/experience_store/ text_classification/data/experience_store/
+rsync -av ~/.autogoal/data/experience_store/ text_generation/data/experience_store/
+```
+
+(Replace `rsync` with `robocopy` on Windows or a manual copy if preferred.)
+
+## Citation
+
+If you build on XAutoLM, please cite our EMNLP paper. We already include the AutoGOAL reference within this repository, and we reproduce it below for completeness should you also wish to acknowledge it in derivative work.
+
+- **XAutoLM (EMNLP 2025, arXiv preprint):**
+  ```bibtex
+  @misc{estevanellvalladares2025xautolmefficientfinetuninglanguage,
+    title        = {XAutoLM: Efficient Fine-Tuning of Language Models via Meta-Learning and AutoML},
+    author       = {Ernesto L. Estevanell-Valladares and Suilan Estevez-Velarde and Yoan Gutierrez and Andres Montoyo and Ruslan Mitkov},
+    year         = {2025},
+    eprint       = {2508.00924},
+    archivePrefix = {arXiv},
+    primaryClass = {cs.CL},
+    url          = {https://arxiv.org/abs/2508.00924}
+  }
+  ```
+  The EMNLP proceedings citation will replace the entry above once the anthology reference is published.
+
+- **AutoGOAL foundation (reference copy):**
+  ```bibtex
+  @article{estevez-velarde2020autogoal,
+    title   = {General-purpose hierarchical optimisation of machine learning pipelines with grammatical evolution},
+    author  = {Suilan Estevez-Velarde and Yoan Gutierrez and Yudivian Almeida-Cruz and Andres Montoyo},
+    journal = {Information Sciences},
+    volume  = {511},
+    pages   = {283--303},
+    year    = {2020},
+    doi     = {10.1016/j.ins.2020.07.035}
+  }
+  ```
+
+## Support
+
+Open an issue if any instructions are unclear or if additional metadata is required for your reproducibility package.
